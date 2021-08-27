@@ -4,10 +4,12 @@ import struct
 import array
 import numpy as np
 
+
 _HEADER_LENGTH = 7316
 _LOHINUMVAL_LENGTH = 412
 _FILE_LENGTH = 256
 _DESCRIPTION_LENGTH = 512
+
 
 def _parseLoHiNumVal(chunk):
     (lo, hi, num) = struct.unpack('iii', chunk[0:12])
@@ -41,12 +43,18 @@ class _Layer:
         self.unit_opts = 0
         self.file = ""
         self.value = np.zeros([100, 100], dtype=np.int16)
-    
+
+
+    def __repr__(self):
+        return "<Layer name:%s>" % (self.name)
+
+
+    def __str__(self):
+        return str(self.__class__) + ": " + str(self.__dict__)
+
+
     def shape(self):
         return self.value.shape()
-    
-    def present(self):
-        return self.num > 0
 
 
 class Landscape:
@@ -64,6 +72,32 @@ class Landscape:
                        _Layer("woody")]
         if self.filename is not None:
             self.readLCP(self.filename)
+    
+
+    def __repr__(self):
+        return "<Landscape description:%s>" % (self.description)
+
+
+    def __str__(self):
+        return str(self.__class__) + ": " + str(self.__dict__)
+    
+
+    def crownPresent(self):
+        if self.crown_fuels == 20:
+            return False
+        elif self.crown_fuels == 21:
+            return True
+        else:
+            raise ValueError("crown_fuels has invalid value: {0}".format(self.crown_fuels))
+    
+
+    def groundPresent(self):
+        if self.ground_fuels == 20:
+            return False
+        elif self.ground_fuels == 21:
+            return True
+        else:
+            raise ValueError("ground_fuels has invalid value: {0}".format(self.ground_fuels))
 
 
     def __parseHeader(self, data):
@@ -73,11 +107,12 @@ class Landscape:
         data_i = 44
         for (i, layer) in enumerate(self.layers):
             (layer.lo, layer.hi, layer.num, layer.vals) = _parseLoHiNumVal(data[data_i:data_i+_LOHINUMVAL_LENGTH])
-            if (i < 5) and layer.num == 0:
-                warnings.warn("No data for mandatory layer " + layer.name)
             data_i += _LOHINUMVAL_LENGTH
 
         (self.num_east, self.num_north) = struct.unpack('ii', data[4164:4172])
+        for layer in self.layers:
+            layer.value = np.zeros([self.num_north, self.num_east], dtype=np.int16)
+
         (self.utm_east, self.utm_west, self.utm_north, self.utm_south) = struct.unpack('dddd', data[4172:4204])
         (self.units_grid) = struct.unpack('i', data[4204:4208])[0]
         (self.res_x, self.res_y) = struct.unpack('dd', data[4208:4224])
@@ -96,11 +131,21 @@ class Landscape:
 
     def __parseBody(self, data):
         data_i = 0
-        for i in range(self.num_east):
-            for j in range(self.num_north):
-                for layer in self.layers:
-                    if layer.num > 0:
-                        layer.value[i,j] = struct.unpack('h', data[data_i:data_i+2])[0]
+        for i in range(self.num_north):
+            for j in range(self.num_east):
+                # Read required bands
+                for k in range(0, 5):
+                    self.layers[k].value[i,j] = struct.unpack('h', data[data_i:data_i+2])[0]
+                    data_i += 2
+                # Read crown fuel bands if present
+                if self.crownPresent():
+                    for k in range(5, 8):
+                        self.layers[k].value[i,j] = struct.unpack('h', data[data_i:data_i+2])[0]
+                        data_i += 2
+                # Read ground fuel bands if present
+                if self.groundPresent():
+                    for k in range(8, 10):
+                        self.layers[k].value[i,j] = struct.unpack('h', data[data_i:data_i+2])[0]
                         data_i += 2
 
 
@@ -120,8 +165,6 @@ class Landscape:
         file.write(struct.pack('dddd', self.lo_east, self.hi_east, self.lo_north, self.hi_north))
 
         for (i, layer) in enumerate(self.layers):
-            if (i < 5) and layer.num == 0:
-                raise IOError("No data for mandatory layer " + layer.name)
             file.write(_buildLoHiNumVal(layer.lo, layer.hi, layer.num, layer.vals))
         
         file.write(struct.pack('ii', self.num_east, self.num_north))
@@ -142,11 +185,19 @@ class Landscape:
     
 
     def __writeBody(self, file):
-        for i in range(self.num_east):
-            for j in range(self.num_north):
-                for layer in self.layers:
-                    if layer.num > 0:
-                        file.write(struct.pack('h', layer.value[i,j]))
+        for i in range(self.num_north):
+            for j in range(self.num_east):
+                # Write required bands
+                for k in range(0, 5):
+                    file.write(struct.pack('h', self.layers[k].value[i,j]))
+                # Write crown fuel bands if present
+                if self.crownPresent():
+                    for k in range(5, 8):
+                        file.write(struct.pack('h', self.layers[k].value[i,j]))
+                # Write ground fuel bands if present
+                if self.groundPresent():
+                    for k in range(8, 10):
+                        file.write(struct.pack('h', self.layers[k].value[i,j]))
 
 
     def writeLCP(self, filename):
@@ -155,18 +206,14 @@ class Landscape:
             self.__writeBody(file)
     
 
-    def writeNPY(self, filename):
-        raise NotImplementedError
+    def writeNPY(self, prefix):
+        for layer in self.layers:
+            np.save(prefix + "_" + layer.name, layer.value)
 
 
 def main():
-    filename = "./flat_nocrown.lcp"
-    landscape = Landscape(filename)
-    landscape.writeLCP("test.lcp")
+    pass
 
-    import code; code.interact(local=locals())
-
-    print(landscape.description)
 
 if __name__ == "__main__":
     main()
