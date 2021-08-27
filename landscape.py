@@ -1,23 +1,35 @@
 import os
-import argparse
+import warnings
 import struct
 import array
 import numpy as np
 
 _HEADER_LENGTH = 7316
-_HILONUMVAL_LENGTH = 412
+_LOHINUMVAL_LENGTH = 412
 _FILE_LENGTH = 256
+_DESCRIPTION_LENGTH = 512
 
-def _parseHiLoNumVal(chunk):
+def _parseLoHiNumVal(chunk):
     (lo, hi, num) = struct.unpack('iii', chunk[0:12])
     vals = np.array(array.array('i', chunk[12:412]))
     return (lo, hi, num, vals)
 
-def _parseString(chunk):
-    (i,), chunk = struct.unpack("I", chunk[:4]), chunk[4:]
-    s_raw, chunk = chunk[:i], chunk[i:]
-    s_decoded = s_raw.decode('utf-8')
-    return s_decoded.split('\x00', 1)[0]
+
+def _parseEncodedString(chunk):
+    decoded = chunk.decode('utf-8')
+    return decoded.split('\x00', 1)[0]
+
+
+def _buildLoHiNumVal(lo, hi, num, vals):
+    chunk = struct.pack("iii", lo, hi, num)
+    chunk += bytearray(vals)
+    return chunk
+
+
+def _buildEncodedString(s, length):
+    padded = "{0:\x00<{1}}".format(s, length)
+    return padded.encode('utf-8')
+
 
 class _Layer:
     def __init__(self, name):
@@ -40,16 +52,16 @@ class _Layer:
 class Landscape:
     def __init__(self, filename=None):
         self.filename = filename
-        self.layers = [Layer("elevation"),
-                       Layer("slope"),
-                       Layer("aspect"),
-                       Layer("fuel"),
-                       Layer("cover"),
-                       Layer("height"),
-                       Layer("base"),
-                       Layer("density"),
-                       Layer("duff"),
-                       Layer("woody")]
+        self.layers = [_Layer("elevation"),
+                       _Layer("slope"),
+                       _Layer("aspect"),
+                       _Layer("fuel"),
+                       _Layer("cover"),
+                       _Layer("height"),
+                       _Layer("base"),
+                       _Layer("density"),
+                       _Layer("duff"),
+                       _Layer("woody")]
         if self.filename is not None:
             self.readLCP(self.filename)
 
@@ -59,13 +71,15 @@ class Landscape:
         (self.lo_east, self.hi_east, self.lo_north, self.hi_north) = struct.unpack('dddd', data[12:44])
 
         data_i = 44
-        for layer in self.layers:
-            (layer.lo, layer.hi, layer.num, layer.vals) = parseHiLoNumVal(data[data_i:data_i+_HILONUMVAL_LENGTH])
-            data_i += _HILONUMVAL_LENGTH
+        for (i, layer) in enumerate(self.layers):
+            (layer.lo, layer.hi, layer.num, layer.vals) = _parseLoHiNumVal(data[data_i:data_i+_LOHINUMVAL_LENGTH])
+            if (i < 5) and layer.num == 0:
+                warnings.warn("No data for mandatory layer " + layer.name)
+            data_i += _LOHINUMVAL_LENGTH
 
         (self.num_east, self.num_north) = struct.unpack('ii', data[4164:4172])
         (self.utm_east, self.utm_west, self.utm_north, self.utm_south) = struct.unpack('dddd', data[4172:4204])
-        (self.units_grid) = struct.unpack('i', data[4204:4208])
+        (self.units_grid) = struct.unpack('i', data[4204:4208])[0]
         (self.res_x, self.res_y) = struct.unpack('dd', data[4208:4224])
 
         unit_opts_arr = struct.unpack('hhhhhhhhhh', data[4224:4244])
@@ -74,10 +88,10 @@ class Landscape:
 
         data_i = 4244
         for layer in self.layers:
-            layer.file = parseString(data[data_i:data_i+_FILE_LENGTH])
+            layer.file = _parseEncodedString(data[data_i:data_i+_FILE_LENGTH])
             data_i += _FILE_LENGTH
 
-        self.description = parseString(data[6804:7316])
+        self.description = _parseEncodedString(data[6804:7316])
 
 
     def __parseBody(self, data):
@@ -94,24 +108,51 @@ class Landscape:
         with open(filename, "rb") as file:
             file_data = file.read()
 
-            header = file_data[0:7316]
-            body = file_data[7316:]
+            header = file_data[0:_HEADER_LENGTH]
+            body = file_data[_HEADER_LENGTH:]
 
-            self.parseHeader(header)
-            self.parseBody(body)
+            self.__parseHeader(header)
+            self.__parseBody(body)
     
 
-    def __writeHeader(self, filename):
-        raise NotImplementedError
+    def __writeHeader(self, file):
+        file.write(struct.pack('iii', self.crown_fuels, self.ground_fuels, self.latitude))
+        file.write(struct.pack('dddd', self.lo_east, self.hi_east, self.lo_north, self.hi_north))
+
+        for (i, layer) in enumerate(self.layers):
+            if (i < 5) and layer.num == 0:
+                raise IOError("No data for mandatory layer " + layer.name)
+            file.write(_buildLoHiNumVal(layer.lo, layer.hi, layer.num, layer.vals))
+        
+        file.write(struct.pack('ii', self.num_east, self.num_north))
+        file.write(struct.pack('dddd', self.utm_east, self.utm_west, self.utm_north, self.utm_south))
+        file.write(struct.pack('i', self.units_grid))
+        file.write(struct.pack('dd', self.res_x, self.res_y))
+
+        unit_opts_arr = [layer.unit_opts for layer in self.layers]
+        file.write(struct.pack('hhhhhhhhhh', *unit_opts_arr))
+
+        for layer in self.layers:
+            file.write(_buildEncodedString(layer.file, _FILE_LENGTH))
+        
+        file.write(_buildEncodedString(self.description, _DESCRIPTION_LENGTH))
+
+        if file.tell() != _HEADER_LENGTH:
+            raise IOError("Issue writing header...")
     
 
-    def __writeBody(self, filename):
-        raise NotImplementedError
+    def __writeBody(self, file):
+        for i in range(self.num_east):
+            for j in range(self.num_north):
+                for layer in self.layers:
+                    if layer.num > 0:
+                        file.write(struct.pack('h', layer.value[i,j]))
 
 
     def writeLCP(self, filename):
-        self.writeHeader(filename)
-        self.writeBody(filename)
+        with open(filename, "wb") as file:
+            self.__writeHeader(file)
+            self.__writeBody(file)
     
 
     def writeNPY(self, filename):
@@ -119,8 +160,9 @@ class Landscape:
 
 
 def main():
-    filename = "./flat_crown.lcp"
+    filename = "./flat_nocrown.lcp"
     landscape = Landscape(filename)
+    landscape.writeLCP("test.lcp")
 
     import code; code.interact(local=locals())
 
