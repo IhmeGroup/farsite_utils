@@ -1,3 +1,5 @@
+"""Utitities for reading, writing, and converting landscape files."""
+
 import os
 import warnings
 import struct
@@ -9,6 +11,9 @@ _HEADER_LENGTH = 7316
 _LOHINUMVAL_LENGTH = 412
 _FILE_LENGTH = 256
 _DESCRIPTION_LENGTH = 512
+_NUM_VALS = 100
+_NUM_EAST_DEFAULT = 100
+_NUM_NORTH_DEFAULT = 100
 
 
 def _parseLoHiNumVal(chunk):
@@ -39,10 +44,10 @@ class _Layer:
         self.lo = 0.0
         self.hi = 0.0
         self.num = 0
-        self.vals = np.zeros(100, dtype=np.int32)
+        self.vals = np.zeros(_NUM_VALS, dtype=np.int32)
         self.unit_opts = 0
         self.file = ""
-        self.value = np.zeros([100, 100], dtype=np.int16)
+        self.value = np.zeros([_NUM_NORTH_DEFAULT, _NUM_EAST_DEFAULT], dtype=np.int16)
 
 
     def __repr__(self):
@@ -60,6 +65,23 @@ class _Layer:
 class Landscape:
     def __init__(self, filename=None):
         self.filename = filename
+        self.crown_fuels = 20
+        self.ground_fuels = 20
+        self.latitude = 0
+        self.lo_east = 0
+        self.hi_east = 0
+        self.lo_north = 0
+        self.hi_north = 0
+        self.num_east = _NUM_EAST_DEFAULT
+        self.num_north = _NUM_NORTH_DEFAULT
+        self.utm_east = 0.0
+        self.utm_west = 0.0
+        self.utm_north = 0.0
+        self.utm_south = 0.0
+        self.units_grid = 0
+        self.res_x = 0.0
+        self.res_y = 0.0
+        self.description = ""
         self.layers = [_Layer("elevation"),
                        _Layer("slope"),
                        _Layer("aspect"),
@@ -70,9 +92,10 @@ class Landscape:
                        _Layer("density"),
                        _Layer("duff"),
                        _Layer("woody")]
+
         if self.filename is not None:
             self.readLCP(self.filename)
-    
+
 
     def __repr__(self):
         return "<Landscape description:%s>" % (self.description)
@@ -80,7 +103,7 @@ class Landscape:
 
     def __str__(self):
         return str(self.__class__) + ": " + str(self.__dict__)
-    
+
 
     def crownPresent(self):
         if self.crown_fuels == 20:
@@ -89,7 +112,7 @@ class Landscape:
             return True
         else:
             raise ValueError("crown_fuels has invalid value: {0}".format(self.crown_fuels))
-    
+
 
     def groundPresent(self):
         if self.ground_fuels == 20:
@@ -158,7 +181,7 @@ class Landscape:
 
             self.__parseHeader(header)
             self.__parseBody(body)
-    
+
 
     def __writeHeader(self, file):
         file.write(struct.pack('iii', self.crown_fuels, self.ground_fuels, self.latitude))
@@ -182,7 +205,7 @@ class Landscape:
 
         if file.tell() != _HEADER_LENGTH:
             raise IOError("Issue writing header...")
-    
+
 
     def __writeBody(self, file):
         for i in range(self.num_north):
@@ -204,7 +227,7 @@ class Landscape:
         with open(filename, "wb") as file:
             self.__writeHeader(file)
             self.__writeBody(file)
-    
+
 
     def writeNPY(self, prefix):
         for layer in self.layers:
