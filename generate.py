@@ -60,16 +60,16 @@ def gradient(field_shape, aspect, slope):
     """Generate field with constant given slope in given direction.
     All angles in radians."""
 
-    plane_norm = np.array([-np.sin(slope) * np.cos(aspect),
-                           -np.sin(slope) * np.sin(aspect),
+    plane_norm = np.array([-np.sin(slope) * np.cos(-aspect + np.pi/2),
+                           -np.sin(slope) * np.sin(-aspect + np.pi/2),
                            np.cos(slope)])
     
     x = np.arange(field_shape[0])
     y = np.arange(field_shape[1])
     [X, Y] = np.meshgrid(x, y)
 
-    field = -(plane_norm[0]*X + plane_norm[1]*Y) / plane_norm[2]
-    return field.T - np.amin(field)
+    field = (plane_norm[0]*X + plane_norm[1]*Y) / plane_norm[2]
+    return field - np.amin(field)
 
 
 def _diamondStep(field, temp_field_size, size, half, n, roughness, height):

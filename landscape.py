@@ -1,6 +1,5 @@
 """Utitities for reading, writing, and converting landscape files."""
 
-import os
 import warnings
 import struct
 import array
