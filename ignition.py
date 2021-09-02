@@ -1,4 +1,4 @@
-"""Class for managing ignition shapes"""
+"""Class for managing ignition shapes."""
 import geopandas as gpd
 
 class Ignition:

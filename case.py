@@ -1,3 +1,4 @@
+"""Class representing a single Farsite simulation."""
 import os
 import warnings
 from enum import Enum
@@ -22,7 +23,11 @@ class LineType(Enum):
 
 class Case:
     def __init__(self, runfile=None):
+        self.name = "case"
         self.root_dir = "./"
+        self.out_dir_local = "output/"
+        self.landscape_dir_local = "landscape/"
+        self.ignition_dir_local = "ignition/"
         self.start_time = dt.datetime(2000, 1, 1)
         self.end_time = dt.datetime(2000, 1, 1)
         self.timestep = 60
@@ -50,7 +55,6 @@ class Case:
         self.number_processors = 1
         self.lcp = ls.Landscape()
         self.ignit = ignition.Ignition()
-        self.out_prefix = ""
         self.out_type = 0
 
         if runfile:
@@ -247,11 +251,10 @@ class Case:
         """Write all files to directory with proper structure"""
 
         [root_dir, name] = os.path.split(prefix)
-        [out_dir_local, name] = os.path.split(self.out_prefix)
 
-        landscape_dir = os.path.join(root_dir, "landscape/")
-        ignition_dir = os.path.join(root_dir, "ignition/")
-        out_dir = os.path.join(root_dir, out_dir_local)
+        landscape_dir = os.path.join(root_dir, self.landscape_dir_local)
+        ignition_dir = os.path.join(root_dir, self.ignition_dir_local)
+        out_dir = os.path.join(root_dir, self.out_dir_local)
 
         if not os.path.isdir(root_dir):
             os.mkdir(root_dir)
