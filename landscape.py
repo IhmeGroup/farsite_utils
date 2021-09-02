@@ -4,6 +4,7 @@ import warnings
 import struct
 import array
 import numpy as np
+from osgeo import osr
 
 
 _HEADER_LENGTH = 7316
@@ -62,8 +63,9 @@ class _Layer:
 
 
 class Landscape:
-    def __init__(self, filename=None):
-        self.filename = filename
+    def __init__(self, prefix=None):
+        self.prefix = prefix
+        self.srs = osr.SpatialReference()
         self.crown_fuels = 20
         self.ground_fuels = 20
         self.latitude = 0
@@ -92,8 +94,8 @@ class Landscape:
                        _Layer("duff"),
                        _Layer("woody")]
 
-        if self.filename is not None:
-            self.readLCP(self.filename)
+        if self.prefix is not None:
+            self.read(self.prefix)
 
 
     def __repr__(self):
@@ -180,6 +182,18 @@ class Landscape:
 
             self.__parseHeader(header)
             self.__parseBody(body)
+    
+
+    def readProjection(self, filename):
+        with open(filename, "r") as f:
+            prj_txt = f.read()
+        self.srs.ImportFromESRI([prj_txt])
+        self.srs.AutoIdentifyEPSG()
+    
+
+    def read(self, prefix):
+        self.readLCP(prefix + ".lcp")
+        self.readProjection(prefix + ".prj")
 
 
     def __writeHeader(self, file):
@@ -226,11 +240,30 @@ class Landscape:
         with open(filename, "wb") as file:
             self.__writeHeader(file)
             self.__writeBody(file)
+    
+
+    def projection(self, format):
+        if format == "WKT":
+            return str(self.srs.ExportToWkt())
+        elif format == "PROJ4":
+            return str(self.srs.ExportToProj4())
+        elif format == "EPSG":
+            return str(self.srs.GetAuthorityCode(None))
 
 
     def writeNPY(self, prefix):
         for layer in self.layers:
             np.save(prefix + "_" + layer.name, layer.value)
+    
+
+    def center(self):
+        return ((self.utm_west  + self.utm_east)  / 2.0,
+                (self.utm_south + self.utm_north) / 2.0)
+    
+
+    def size(self):
+        return ((self.utm_east -  self.utm_west),
+                (self.utm_north - self.utm_south))
 
 
 def main():

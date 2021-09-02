@@ -2,6 +2,7 @@
 
 import math
 import numpy as np
+from shapely.geometry import Polygon
 
 
 def randomNormal(field_shape, mean=0, stddev=0.25):
@@ -152,3 +153,10 @@ def diamondSquare(field_shape, height, roughness):
 
     # Shift field vertically by setting lowest point to 0
     return field - np.amin(field)
+
+def regularPolygon(sides, radius, rotation=0, translation=(0, 0)):
+    theta = 2 * np.pi / sides
+    points = [[np.sin(theta * i + rotation) * radius + translation[0],
+               np.cos(theta * i + rotation) * radius + translation[1]] for i in range(sides)]
+    
+    return Polygon(points)
