@@ -5,10 +5,12 @@ from enum import Enum
 import datetime as dt
 import pandas as pd
 
-import landscape as ls
+import landscape
 import raws
 import ignition
+import sbatch
 import generate as gen
+
 
 class CrownFireMethod(Enum):
     FINNEY = 1
@@ -22,12 +24,13 @@ class LineType(Enum):
 
 
 class Case:
-    def __init__(self, runfile=None):
+    def __init__(self, runfile_name=None, jobfile_name=None):
         self.name = "case"
         self.root_dir = "./"
         self.out_dir_local = "output/"
         self.landscape_dir_local = "landscape/"
         self.ignition_dir_local = "ignition/"
+        self.jobfile_name = "job.slurm"
         self.start_time = dt.datetime(2000, 1, 1)
         self.end_time = dt.datetime(2000, 1, 1)
         self.timestep = 60
@@ -53,26 +56,29 @@ class Case:
         self.foliar_moisture_content = 100
         self.crown_fire_method = CrownFireMethod.FINNEY
         self.number_processors = 1
-        self.lcp = ls.Landscape()
+        self.lcp = landscape.Landscape()
         self.ignit = ignition.Ignition()
         self.out_type = 0
+        self.sbatch = sbatch.SBatch()
 
-        if runfile:
-            self.read(runfile)
+        if runfile_name:
+            self.read(runfile_name, jobfile_name)
     
 
     def __str__(self):
         return str(self.__class__) + ": " + str(self.__dict__)
     
 
-    def read(self, runfilename):
-        [self.root_dir, name] = os.path.split(runfilename)
-        with open(runfilename, "r") as file:
+    def read(self, runfile_name, jobfile_name="job.slurm"):
+        self.jobfile_name = jobfile_name
+        self.sbatch.read(self.jobfile_name)
+        [self.root_dir, name] = os.path.split(runfile_name)
+        with open(runfile_name, "r") as file:
             line = file.readline()
         args = line.split(" ")
-        self.lcp = ls.Landscape(os.path.join(self.root_dir, os.path.splitext(args[0])[0]))
+        self.lcp.read(os.path.join(self.root_dir, os.path.splitext(args[0])[0]))
         self.readInput(os.path.join(self.root_dir, args[1]))
-        self.ignit = ignition.Ignition(os.path.join(self.root_dir, args[2]))
+        self.ignit.read(os.path.join(self.root_dir, args[2]))
         self.out_prefix = args[4]
         self.out_type = int(args[5])
     
@@ -230,6 +236,7 @@ class Case:
 
     def readInput(self, filename):
         """Read Farsite input file"""
+        self.fuel_moistures = self.fuel_moistures[0:0]
         with open(filename, "r") as file:
             for line in file:
                 line_type = self.__detectLineType(line)
@@ -270,11 +277,13 @@ class Case:
         weather_file = prefix+".raws"
         ignit_file = os.path.join(ignition_dir, name+".shp")
         run_file = os.path.join(root_dir, "run_"+name+".txt")
+        sbatch_file = os.path.join(root_dir, "job.slurm")
         
         self.writeInput(input_file)
         self.lcp.write(lcp_file)
         self.weather.write(weather_file)
         self.ignit.write(ignit_file)
+        self.sbatch.write(sbatch_file)
 
         with open(run_file, "w") as file:
             file.write("{0} {1} {2} {3} {4} {5}".format(
@@ -284,6 +293,10 @@ class Case:
                 0,
                 self.out_prefix,
                 self.out_type))
+    
+
+    def run(self):
+        os.system("sbatch")
 
 
 def main():

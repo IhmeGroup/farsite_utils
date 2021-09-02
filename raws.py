@@ -6,6 +6,7 @@ import pandas as pd
 
 _HEADER_LINES = 3
 
+
 class Unit(Enum):
     ENGLISH = 1
     METRIC = 2
@@ -91,6 +92,7 @@ class RAWS:
 
 
     def read(self, filename):
+        self.data = self.data[0:0]
         with open(filename, "r") as file:
             self.__parseHeader(file)
             self.__parseBody(file)

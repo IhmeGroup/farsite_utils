@@ -1,5 +1,4 @@
 """Utitities for reading, writing, and converting landscape files."""
-
 import struct
 import array
 import numpy as np

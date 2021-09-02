@@ -1,6 +1,7 @@
 """Class for managing ignition shapes."""
 import geopandas as gpd
 
+
 class Ignition:
     def __init__(self, filename=None):
         self.filename = filename
