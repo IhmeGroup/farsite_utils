@@ -183,10 +183,15 @@ class Landscape:
     
 
     def readProjection(self, filename):
-        with open(filename, "r") as f:
-            prj_txt = f.read()
+        with open(filename, "r") as file:
+            prj_txt = file.read()
         self.srs.ImportFromESRI([prj_txt])
         self.srs.AutoIdentifyEPSG()
+    
+
+    def writeProjection(self, filename):
+        with open(filename, "w") as file:
+            file.write(self.srs.ExportToWkt())
     
 
     def read(self, prefix):
@@ -238,6 +243,11 @@ class Landscape:
         with open(filename, "wb") as file:
             self.__writeHeader(file)
             self.__writeBody(file)
+    
+
+    def write(self, prefix):
+        self.writeLCP(prefix+".lcp")
+        self.writeProjection(prefix+".prj")
     
 
     def projection(self, format):

@@ -247,24 +247,31 @@ class Case:
         """Write all files to directory with proper structure"""
 
         [root_dir, name] = os.path.split(prefix)
+        [out_dir_local, name] = os.path.split(self.out_prefix)
+
+        landscape_dir = os.path.join(root_dir, "landscape/")
+        ignition_dir = os.path.join(root_dir, "ignition/")
+        out_dir = os.path.join(root_dir, out_dir_local)
 
         if not os.path.isdir(root_dir):
             os.mkdir(root_dir)
+        if not os.path.isdir(landscape_dir):
+            os.mkdir(landscape_dir)
+        if not os.path.isdir(ignition_dir):
+            os.mkdir(ignition_dir)
+        if not os.path.isdir(out_dir):
+            os.mkdir(out_dir)
         
         input_file = prefix+".input"
-        lcp_file = os.path.join(root_dir, "landscape/", name+".lcp")
+        lcp_file = os.path.join(landscape_dir, name)
         weather_file = prefix+".raws"
-        ignit_file = os.path.join(root_dir, "ignition/", name+".shp")
+        ignit_file = os.path.join(ignition_dir, name+".shp")
         run_file = os.path.join(root_dir, "run_"+name+".txt")
         
         self.writeInput(input_file)
-        self.lcp.writeLCP(lcp_file)
+        self.lcp.write(lcp_file)
         self.weather.write(weather_file)
         self.ignit.write(ignit_file)
-
-        [out_dir, name] = os.path.split(self.out_prefix)
-        if not os.isdir(out_dir):
-            os.mkdir(out_dir)
 
         with open(run_file, "w") as file:
             file.write("{0} {1} {2} {3} {4} {5}".format(

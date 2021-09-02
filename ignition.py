@@ -15,7 +15,7 @@ class Ignition:
     
 
     def write(self, filename):
-        raise NotImplementedError
+        self.gdf.to_file(filename)
 
 
 def main():
