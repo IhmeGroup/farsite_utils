@@ -13,7 +13,6 @@ class Unit(Enum):
 
 class RAWS:
     def __init__(self, filename=None):
-        self.filename = filename
         self.elevation = 0
         self.units = Unit.ENGLISH
         self.count = 0
@@ -24,8 +23,7 @@ class RAWS:
                        "precipitation",
                        "wind_speed",
                        "wind_direction",
-                       "cloud_cover"]
-        )
+                       "cloud_cover"])
 
         if filename:
             self.read(filename)
@@ -75,8 +73,7 @@ class RAWS:
             int(vals[1]),
             int(vals[2]),
             int(vals[3][0:2]),
-            int(vals[3][2:4])
-        )
+            int(vals[3][2:4]))
         entry['temperature'] =    int(vals[4])
         entry['humidity'] =       int(vals[5])
         entry['precipitation'] =  float(vals[6])
@@ -117,8 +114,7 @@ class RAWS:
             entry['precipitation'],
             entry['wind_speed'],
             entry['wind_direction'],
-            entry['cloud_cover']
-        ))
+            entry['cloud_cover']))
     
 
     def __writeBody(self, file):
@@ -130,3 +126,11 @@ class RAWS:
         with open(filename, "w") as file:
             self.__writeHeader(file)
             self.__writeBody(file)
+
+
+def main():
+    pass
+
+
+if __name__ == "__main__":
+    main()

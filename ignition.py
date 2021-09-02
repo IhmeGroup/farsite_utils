@@ -16,3 +16,11 @@ class Ignition:
 
     def write(self, filename):
         raise NotImplementedError
+
+
+def main():
+    pass
+
+
+if __name__ == "__main__":
+    main()

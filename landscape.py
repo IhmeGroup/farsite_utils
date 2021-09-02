@@ -1,6 +1,5 @@
 """Utitities for reading, writing, and converting landscape files."""
 
-import warnings
 import struct
 import array
 import numpy as np
@@ -64,7 +63,6 @@ class _Layer:
 
 class Landscape:
     def __init__(self, prefix=None):
-        self.prefix = prefix
         self.srs = osr.SpatialReference()
         self.crown_fuels = 20
         self.ground_fuels = 20
@@ -94,8 +92,8 @@ class Landscape:
                        _Layer("duff"),
                        _Layer("woody")]
 
-        if self.prefix:
-            self.read(self.prefix)
+        if prefix:
+            self.read(prefix)
 
 
     def __repr__(self):
