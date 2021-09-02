@@ -94,7 +94,7 @@ class Landscape:
                        _Layer("duff"),
                        _Layer("woody")]
 
-        if self.prefix is not None:
+        if self.prefix:
             self.read(self.prefix)
 
 

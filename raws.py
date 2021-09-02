@@ -1,16 +1,21 @@
 """Utilities for reading and writing RAWS files."""
+from enum import Enum
 import datetime as dt
 import pandas as pd
 
 
 _HEADER_LINES = 3
 
+class Unit(Enum):
+    ENGLISH = 1
+    METRIC = 2
+
 
 class RAWS:
     def __init__(self, filename=None):
         self.filename = filename
         self.elevation = 0
-        self.units = "ENGLISH"
+        self.units = Unit.ENGLISH
         self.count = 0
         self.data = pd.DataFrame(
             columns = ["time",
@@ -46,11 +51,10 @@ class RAWS:
         line2 = file.readline()
         [var2, val2] = self.__parseHeaderLine(line2)
         if var2 == "RAWS_UNITS":
-            units = val2.upper()
-            if units != "ENGLISH":
-                raise IOError("RAWS files only support English units")
-            else:
-                self.units = units
+            try:
+                self.units = Unit[val2.upper()]
+            except KeyError:
+                raise IOError("Invalid units specification. Must be ENGLISH or METRIC.")
         else:
             raise IOError("File is improperly formatted")
         
@@ -74,11 +78,11 @@ class RAWS:
             int(vals[3][2:4])
         )
         entry['temperature'] =    int(vals[4])
-        entry['humidity'] =       float(vals[5]) / 100
+        entry['humidity'] =       int(vals[5])
         entry['precipitation'] =  float(vals[6])
         entry['wind_speed'] =     int(vals[7])
         entry['wind_direction'] = int(vals[8])
-        entry['cloud_cover'] =    float(vals[9]) / 100
+        entry['cloud_cover'] =    int(vals[9])
         return entry
     
 
@@ -97,7 +101,7 @@ class RAWS:
 
     def __writeHeader(self, file):
         file.write("RAWS_ELEVATION: {0}\n".format(self.elevation))
-        file.write("RAWS_UNITS: " + self.units.title() + "\n")
+        file.write("RAWS_UNITS: " + self.units.name.title() + "\n")
         file.write("RAWS: {0}\n".format(self.count))
     
 
@@ -109,11 +113,11 @@ class RAWS:
             entry['time'].hour,
             entry['time'].minute,
             entry['temperature'],
-            int(entry['humidity'] * 100),
+            entry['humidity'],
             entry['precipitation'],
             entry['wind_speed'],
             entry['wind_direction'],
-            int(entry['cloud_cover'] * 100)
+            entry['cloud_cover']
         ))
     
 
