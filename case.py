@@ -9,6 +9,7 @@ import landscape
 import raws
 import ignition
 import sbatch
+import ascii_data
 import generate as gen
 
 
@@ -24,13 +25,14 @@ class LineType(Enum):
 
 
 class Case:
-    def __init__(self, runfile_name=None, jobfile_name=None):
+    def __init__(self, jobfile_name=None):
+        # Inputs
         self.name = "case"
         self.root_dir = "./"
         self.out_dir_local = "output/"
         self.landscape_dir_local = "landscape/"
         self.ignition_dir_local = "ignition/"
-        self.jobfile_name = "job.slurm"
+        self.jobfile_name_local = "job.slurm"
         self.start_time = dt.datetime(2000, 1, 1)
         self.end_time = dt.datetime(2000, 1, 1)
         self.timestep = 60
@@ -61,36 +63,55 @@ class Case:
         self.out_type = 0
         self.sbatch = sbatch.SBatch()
 
-        if runfile_name:
-            self.read(runfile_name, jobfile_name)
+        # Outputs
+        self.arrival_time       = ascii_data.ASCIIData()
+        self.crown_fire         = ascii_data.ASCIIData()
+        self.flame_length       = ascii_data.ASCIIData()
+        self.heat_per_unit_area = ascii_data.ASCIIData()
+        self.ignitions          = ascii_data.ASCIIData()
+        self.intensity          = ascii_data.ASCIIData()
+        self.reaction_intensity = ascii_data.ASCIIData()
+        self.spot_grid          = ascii_data.ASCIIData()
+        self.spread_direction   = ascii_data.ASCIIData()
+        self.spread_rate        = ascii_data.ASCIIData()
+
+        if jobfile_name:
+            self.read(jobfile_name)
     
 
     def __str__(self):
         return str(self.__class__) + ": " + str(self.__dict__)
     
 
-    def read(self, runfile_name, jobfile_name="job.slurm"):
-        self.jobfile_name = jobfile_name
-        self.sbatch.read(self.jobfile_name)
-        [self.root_dir, name] = os.path.split(runfile_name)
+    def setName(self, name):
+        self.name = name
+        self.sbatch.set_option("-J", name)
+    
+
+    def read(self, jobfile_name):
+        [self.root_dir, self.jobfile_name_local] = os.path.split(jobfile_name)
+        self.sbatch.read(jobfile_name)
+        runfile_name = os.path.join(self.root_dir, self.sbatch.runfile_name_local)
         with open(runfile_name, "r") as file:
             line = file.readline()
         args = line.split(" ")
         self.lcp.read(os.path.join(self.root_dir, os.path.splitext(args[0])[0]))
         self.readInput(os.path.join(self.root_dir, args[1]))
         self.ignit.read(os.path.join(self.root_dir, args[2]))
-        self.out_prefix = args[4]
+        out_prefix_local = args[4]
+        [self.out_dir_local, name] = os.path.split(out_prefix_local)
+        self.setName(name)
         self.out_type = int(args[5])
     
 
     def __writeInputHeader(self, file):
         file.write("FARSITE INPUTS FILE VERSION 1.0\n")
-        file.write("FARSITE_START_TIME: {0} {1} {2}{3:02d}\n".format(
+        file.write("FARSITE_START_TIME: {0:02d} {1:02d} {2:02d}{3:02d}\n".format(
             self.start_time.month,
             self.start_time.day,
             self.start_time.hour,
             self.start_time.minute))
-        file.write("FARSITE_END_TIME: {0} {1} {2}{3:02d}\n".format(
+        file.write("FARSITE_END_TIME: {0:02d} {1:02d} {2:02d}{3:02d}\n".format(
             self.end_time.month,
             self.end_time.day,
             self.end_time.hour,
@@ -124,6 +145,10 @@ class Case:
         file.write("SPOTTING_SEED: {0}\n".format(self.spotting_seed))
     
 
+    def __writeInputWeather(self, file):
+        file.write("RAWS_FILE: {0}\n".format(self.name+".raws"))
+    
+
     def __writeInputCrown(self, file):
         file.write("FOLIAR_MOISTURE_CONTENT: {0}\n".format(self.foliar_moisture_content))
         file.write("CROWN_FIRE_METHOD: " + self.crown_fire_method.name.title() + "\n")
@@ -137,6 +162,8 @@ class Case:
             self.__writeInputSpotting(file)
             file.write("\n\n")
             self.__writeInputMoisture(file)
+            file.write("\n\n")
+            self.__writeInputWeather(file)
             file.write("\n\n")
             self.__writeInputCrown(file)
     
@@ -254,17 +281,15 @@ class Case:
                         self.__readNameValLine(line)
     
 
-    def write(self, prefix):
+    def write(self):
         """Write all files to directory with proper structure"""
 
-        [root_dir, name] = os.path.split(prefix)
+        landscape_dir = os.path.join(self.root_dir, self.landscape_dir_local)
+        ignition_dir = os.path.join(self.root_dir, self.ignition_dir_local)
+        out_dir = os.path.join(self.root_dir, self.out_dir_local)
 
-        landscape_dir = os.path.join(root_dir, self.landscape_dir_local)
-        ignition_dir = os.path.join(root_dir, self.ignition_dir_local)
-        out_dir = os.path.join(root_dir, self.out_dir_local)
-
-        if not os.path.isdir(root_dir):
-            os.mkdir(root_dir)
+        if not os.path.isdir(self.root_dir):
+            os.mkdir(self.root_dir)
         if not os.path.isdir(landscape_dir):
             os.mkdir(landscape_dir)
         if not os.path.isdir(ignition_dir):
@@ -272,31 +297,61 @@ class Case:
         if not os.path.isdir(out_dir):
             os.mkdir(out_dir)
         
-        input_file = prefix+".input"
-        lcp_file = os.path.join(landscape_dir, name)
-        weather_file = prefix+".raws"
-        ignit_file = os.path.join(ignition_dir, name+".shp")
-        run_file = os.path.join(root_dir, "run_"+name+".txt")
-        sbatch_file = os.path.join(root_dir, "job.slurm")
+        input_file_local = self.name+".input"
+        lcp_prefix_local = os.path.join(self.landscape_dir_local, self.name)
+        weather_file_local = self.name+".raws"
+        ignit_file_local = os.path.join(self.ignition_dir_local, self.name+".shp")
+        run_file_local = "run_"+self.name+".txt"
+        job_file_local = "job.slurm"
+        out_prefix_local = os.path.join(self.out_dir_local, self.name)
+
+        input_file = os.path.join(self.root_dir, input_file_local)
+        lcp_prefix = os.path.join(self.root_dir, lcp_prefix_local)
+        weather_file = os.path.join(self.root_dir, weather_file_local)
+        ignit_file = os.path.join(self.root_dir, ignit_file_local)
+        run_file = os.path.join(self.root_dir, run_file_local)
+        job_file = os.path.join(self.root_dir, job_file_local)
         
         self.writeInput(input_file)
-        self.lcp.write(lcp_file)
+        self.lcp.write(lcp_prefix)
         self.weather.write(weather_file)
         self.ignit.write(ignit_file)
-        self.sbatch.write(sbatch_file)
+        self.sbatch.runfile_name_local = run_file_local
+        self.sbatch.write(job_file)
 
         with open(run_file, "w") as file:
             file.write("{0} {1} {2} {3} {4} {5}".format(
-                lcp_file,
-                input_file,
-                ignit_file,
+                lcp_prefix_local+".lcp",
+                input_file_local,
+                ignit_file_local,
                 0,
-                self.out_prefix,
+                out_prefix_local,
                 self.out_type))
     
 
     def run(self):
-        os.system("sbatch")
+        os.chdir(self.root_dir)
+        os.system("sbatch " + self.jobfile_name_local)
+    
+
+    def __outputFile(self, name):
+        return os.path.join(
+            self.root_dir,
+            self.out_dir_local,
+            self.name + "_" + name + ".asc")
+    
+
+    def readOutput(self):
+        self.arrival_time       = ascii_data.ASCIIData(self.__outputFile("ArrivalTime"))
+        self.crown_fire         = ascii_data.ASCIIData(self.__outputFile("CrownFire"))
+        self.flame_length       = ascii_data.ASCIIData(self.__outputFile("FlameLength"))
+        self.heat_per_unit_area = ascii_data.ASCIIData(self.__outputFile("HeatPerUnitArea"))
+        self.ignitions          = ascii_data.ASCIIData(self.__outputFile("Ignitions"))
+        self.intensity          = ascii_data.ASCIIData(self.__outputFile("Intensity"))
+        self.reaction_intensity = ascii_data.ASCIIData(self.__outputFile("ReactionIntensity"))
+        self.spot_grid          = ascii_data.ASCIIData(self.__outputFile("SpotGrid"))
+        self.spread_direction   = ascii_data.ASCIIData(self.__outputFile("SpreadDirection"))
+        self.spread_rate        = ascii_data.ASCIIData(self.__outputFile("SpreadRate"))
 
 
 def main():

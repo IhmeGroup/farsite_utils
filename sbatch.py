@@ -1,5 +1,6 @@
 """Class for managing SLURM batch configurations"""
 
+import os
 import datetime as dt
 from string import Template
 
@@ -37,8 +38,8 @@ class _Option:
         if value_type == dt.timedelta:
             if "-" in string:
                 split = string.split("-")
-                days = [0]
-                time = [1]
+                days = split[0]
+                time = split[1]
             else:
                 days = "0"
                 time = string
@@ -72,6 +73,7 @@ class SBatch:
         ]
         self.echoline = ""
         self.exec = []
+        self.runfile_name_local = ""
 
         if filename:
             self.read(filename)
@@ -81,9 +83,16 @@ class SBatch:
         return str(self.__class__) + ": " + str(self.__dict__)
     
 
+    def set_option(self, flag, value):
+        for opt in self.options:
+            if opt.flag == flag:
+                opt.value = value
+                return
+        self.options.append(_Option(flag, value))
+    
+
     def read(self, filename):
         self.options = []
-        self.exec = []
         with open(filename, "r") as file:
             for line in file:
                 split = line.strip().split(" ")
@@ -103,8 +112,14 @@ class SBatch:
                     self.options.append(opt)
                 elif split[0] == "echo":
                     self.echoline = " ".join(split[1:])
-                else:
-                    self.exec.append(line)
+                elif "TestFARSITE" in split[0]:
+                    self.exec = split[0]
+                    runfile_name = split[1]
+                    runfile_name_split = runfile_name.split(os.path.sep)
+                    if runfile_name_split[0] == ".":
+                        self.runfile_name_local = os.path.join(*runfile_name_split[1:])
+                    else:
+                        self.runfile_name_local = runfile_name
 
 
     def write(self, filename):
@@ -116,8 +131,7 @@ class SBatch:
             file.write("\n")
             file.write("echo " + self.echoline + "\n")
             file.write("\n")
-            for cmd in self.exec:
-                file.write(cmd)
+            file.write(self.exec + " " + self.runfile_name_local)
 
 
 def main():
