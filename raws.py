@@ -1,6 +1,7 @@
 """Utilities for reading and writing RAWS files."""
 from enum import Enum
 import datetime as dt
+import numpy as np
 import pandas as pd
 
 
@@ -128,6 +129,31 @@ class RAWS:
         with open(filename, "w") as file:
             self.__writeHeader(file)
             self.__writeBody(file)
+    
+
+    def writeWindNPY(self, prefix, shape, query_times=None):
+        if not query_times:
+            query_times = [self.data.loc[0, 'time']]
+        
+        # Convert datetimes to elapsed seconds
+        epoch = self.data.loc[0, 'time']
+        query_times_secs = [(time - epoch).total_seconds() for time in query_times]
+        raws_times_secs = [(time.to_pydatetime() - epoch).total_seconds() for time in self.data['time']]
+
+        # Interpolate data at query times
+        wind_speed     = np.interp(query_times_secs, raws_times_secs, list(self.data['wind_speed']))
+        wind_direction = np.interp(query_times_secs, raws_times_secs, list(self.data['wind_direction']))
+
+        # Compute components from speed and direction
+        wind_east  = np.zeros([len(query_times), shape[0], shape[1]])
+        wind_north = np.zeros([len(query_times), shape[0], shape[1]])
+        for i in range(len(query_times)):
+            wind_east[i,:]  = -wind_speed[i] * np.cos(wind_direction[i] + np.pi/2)
+            wind_north[i,:] = -wind_speed[i] * np.sin(wind_direction[i] + np.pi/2)
+        
+        # Write
+        np.save(prefix + "_wind_east.npy",  wind_east)
+        np.save(prefix + "_wind_north.hpy", wind_north)
 
 
 def main():

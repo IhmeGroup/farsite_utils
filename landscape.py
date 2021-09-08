@@ -37,8 +37,7 @@ def _buildEncodedString(s, length):
 
 
 class _Layer:
-    def __init__(self, name):
-        self.name = name
+    def __init__(self):
         self.lo = 0.0
         self.hi = 0.0
         self.num = 0
@@ -46,10 +45,6 @@ class _Layer:
         self.unit_opts = 0
         self.file = ""
         self.value = np.zeros([_NUM_NORTH_DEFAULT, _NUM_EAST_DEFAULT], dtype=np.int16)
-
-
-    def __repr__(self):
-        return "<Layer name:%s>" % (self.name)
 
 
     def __str__(self):
@@ -80,16 +75,16 @@ class Landscape:
         self.res_x = 0.0
         self.res_y = 0.0
         self.description = ""
-        self.layers = [_Layer("elevation"),
-                       _Layer("slope"),
-                       _Layer("aspect"),
-                       _Layer("fuel"),
-                       _Layer("cover"),
-                       _Layer("height"),
-                       _Layer("base"),
-                       _Layer("density"),
-                       _Layer("duff"),
-                       _Layer("woody")]
+        self.layers = {'elevation': _Layer(),
+                       'slope':     _Layer(),
+                       'aspect':    _Layer(),
+                       'fuel':      _Layer(),
+                       'cover':     _Layer(),
+                       'height':    _Layer(),
+                       'base':      _Layer(),
+                       'density':   _Layer(),
+                       'duff':      _Layer(),
+                       'woody':     _Layer()}
 
         if prefix:
             self.read(prefix)
@@ -126,12 +121,12 @@ class Landscape:
         (self.lo_east, self.hi_east, self.lo_north, self.hi_north) = struct.unpack('dddd', data[12:44])
 
         data_i = 44
-        for (i, layer) in enumerate(self.layers):
+        for layer in self.layers.values():
             (layer.lo, layer.hi, layer.num, layer.vals) = _parseLoHiNumVal(data[data_i:data_i+_LOHINUMVAL_LENGTH])
             data_i += _LOHINUMVAL_LENGTH
 
         (self.num_east, self.num_north) = struct.unpack('ii', data[4164:4172])
-        for layer in self.layers:
+        for layer in self.layers.values():
             layer.value = np.zeros([self.num_north, self.num_east], dtype=np.int16)
 
         (self.utm_east, self.utm_west, self.utm_north, self.utm_south) = struct.unpack('dddd', data[4172:4204])
@@ -139,11 +134,11 @@ class Landscape:
         (self.res_x, self.res_y) = struct.unpack('dd', data[4208:4224])
 
         unit_opts_arr = struct.unpack('hhhhhhhhhh', data[4224:4244])
-        for (i, layer) in enumerate(self.layers):
+        for i, layer in enumerate(self.layers.values()):
             layer.unit_opts = unit_opts_arr[i]
 
         data_i = 4244
-        for layer in self.layers:
+        for layer in self.layers.values():
             layer.file = _parseEncodedString(data[data_i:data_i+_FILE_LENGTH])
             data_i += _FILE_LENGTH
 
@@ -155,19 +150,23 @@ class Landscape:
         for i in range(self.num_north):
             for j in range(self.num_east):
                 # Read required bands
-                for k in range(0, 5):
-                    self.layers[k].value[i,j] = struct.unpack('h', data[data_i:data_i+2])[0]
-                    data_i += 2
+                self.layers['elevation'].value[i,j] = struct.unpack('h', data[data_i+0:data_i+ 2])[0]
+                self.layers['slope'    ].value[i,j] = struct.unpack('h', data[data_i+2:data_i+ 4])[0]
+                self.layers['aspect'   ].value[i,j] = struct.unpack('h', data[data_i+4:data_i+ 6])[0]
+                self.layers['fuel'     ].value[i,j] = struct.unpack('h', data[data_i+6:data_i+ 8])[0]
+                self.layers['cover'    ].value[i,j] = struct.unpack('h', data[data_i+8:data_i+10])[0]
+                data_i += 10
                 # Read crown fuel bands if present
                 if self.crownPresent():
-                    for k in range(5, 8):
-                        self.layers[k].value[i,j] = struct.unpack('h', data[data_i:data_i+2])[0]
-                        data_i += 2
+                    self.layers['height' ].value[i,j] = struct.unpack('h', data[data_i+0:data_i+2])[0]
+                    self.layers['base'   ].value[i,j] = struct.unpack('h', data[data_i+2:data_i+4])[0]
+                    self.layers['density'].value[i,j] = struct.unpack('h', data[data_i+4:data_i+6])[0]
+                    data_i += 6
                 # Read ground fuel bands if present
                 if self.groundPresent():
-                    for k in range(8, 10):
-                        self.layers[k].value[i,j] = struct.unpack('h', data[data_i:data_i+2])[0]
-                        data_i += 2
+                    self.layers['duff' ].value[i,j] = struct.unpack('h', data[data_i+0:data_i+2])[0]
+                    self.layers['woody'].value[i,j] = struct.unpack('h', data[data_i+2:data_i+4])[0]
+                    data_i += 4
 
 
     def readLCP(self, filename):
@@ -226,16 +225,20 @@ class Landscape:
         for i in range(self.num_north):
             for j in range(self.num_east):
                 # Write required bands
-                for k in range(0, 5):
-                    file.write(struct.pack('h', self.layers[k].value[i,j]))
+                file.write(struct.pack('h', self.layers['elevation'].value[i,j]))
+                file.write(struct.pack('h', self.layers['slope'    ].value[i,j]))
+                file.write(struct.pack('h', self.layers['aspect'   ].value[i,j]))
+                file.write(struct.pack('h', self.layers['fuel'     ].value[i,j]))
+                file.write(struct.pack('h', self.layers['cover'    ].value[i,j]))
                 # Write crown fuel bands if present
                 if self.crownPresent():
-                    for k in range(5, 8):
-                        file.write(struct.pack('h', self.layers[k].value[i,j]))
+                    file.write(struct.pack('h', self.layers['height' ].value[i,j]))
+                    file.write(struct.pack('h', self.layers['base'   ].value[i,j]))
+                    file.write(struct.pack('h', self.layers['density'].value[i,j]))
                 # Write ground fuel bands if present
                 if self.groundPresent():
-                    for k in range(8, 10):
-                        file.write(struct.pack('h', self.layers[k].value[i,j]))
+                    file.write(struct.pack('h', self.layers['duff' ].value[i,j]))
+                    file.write(struct.pack('h', self.layers['woody'].value[i,j]))
 
 
     def writeLCP(self, filename):
@@ -259,8 +262,8 @@ class Landscape:
 
 
     def writeNPY(self, prefix):
-        for layer in self.layers:
-            np.save(prefix + "_" + layer.name, layer.value)
+        for name, layer in self.layers.items():
+            np.save(prefix + "_" + name, layer.value)
     
 
     def center(self):

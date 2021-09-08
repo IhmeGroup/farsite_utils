@@ -4,6 +4,12 @@ import warnings
 from enum import Enum
 import datetime as dt
 import pandas as pd
+import geopandas as gpd
+from shapely import geometry
+from shapely.ops import unary_union
+from shapely.prepared import prep
+import numpy as np
+import matplotlib.pyplot as plt
 
 import landscape
 import raws
@@ -11,6 +17,9 @@ import ignition
 import sbatch
 import ascii_data
 import generate as gen
+
+
+_DEFAULT_YEAR = 2000
 
 
 class CrownFireMethod(Enum):
@@ -33,8 +42,8 @@ class Case:
         self.landscape_dir_local = "landscape/"
         self.ignition_dir_local = "ignition/"
         self.jobfile_name_local = "job.slurm"
-        self.start_time = dt.datetime(2000, 1, 1)
-        self.end_time = dt.datetime(2000, 1, 1)
+        self.start_time = dt.datetime(_DEFAULT_YEAR, 1, 1)
+        self.end_time = dt.datetime(_DEFAULT_YEAR, 1, 1)
         self.timestep = 60
         self.distance_res = 30.0
         self.perimeter_res = 60.0
@@ -59,7 +68,7 @@ class Case:
         self.crown_fire_method = CrownFireMethod.FINNEY
         self.number_processors = 1
         self.lcp = landscape.Landscape()
-        self.ignit = ignition.Ignition()
+        self.ignition = gpd.GeoDataFrame()
         self.out_type = 0
         self.sbatch = sbatch.SBatch()
 
@@ -74,6 +83,9 @@ class Case:
         self.spot_grid          = ascii_data.ASCIIData()
         self.spread_direction   = ascii_data.ASCIIData()
         self.spread_rate        = ascii_data.ASCIIData()
+        self.spots = gpd.GeoDataFrame()
+        self.perimeters = gpd.GeoDataFrame()
+        self.perimeters_merged = gpd.GeoDataFrame()
 
         if jobfile_name:
             self.read(jobfile_name)
@@ -97,7 +109,7 @@ class Case:
         args = line.split(" ")
         self.lcp.read(os.path.join(self.root_dir, os.path.splitext(args[0])[0]))
         self.readInput(os.path.join(self.root_dir, args[1]))
-        self.ignit.read(os.path.join(self.root_dir, args[2]))
+        self.ignition = gpd.read_file(os.path.join(self.root_dir, args[2]))
         out_prefix_local = args[4]
         [self.out_dir_local, name] = os.path.split(out_prefix_local)
         self.setName(name)
@@ -205,7 +217,7 @@ class Case:
     def __parseTime(self, timestr):
         vals = timestr.split(" ")
         return dt.datetime(
-            2000,
+            _DEFAULT_YEAR,
             int(vals[0]),
             int(vals[1]),
             int(vals[2][0:2]),
@@ -240,6 +252,8 @@ class Case:
             self.spotting_seed = int(val)
         elif name == "RAWS_FILE":
             self.weather = raws.RAWS(os.path.join(self.root_dir, val))
+            self.start_time = self.start_time.replace(year=self.weather.data.at[0, 'time'].year)
+            self.end_time = self.end_time.replace(year=self.weather.data.at[0, 'time'].year)
         elif name == "FOLIAR_MOISTURE_CONTENT":
             self.foliar_moisture_content = int(val)
         elif name == "CROWN_FIRE_METHOD":
@@ -252,12 +266,12 @@ class Case:
         for line in lines:
             vals = self.__parseListLine(line)
             entry = {}
-            entry['model']           = vals[0]
-            entry['1_hour']          = vals[1]
-            entry['10_hour']         = vals[2]
-            entry['100_hour']        = vals[3]
-            entry['live_herbaceous'] = vals[4]
-            entry['live_woody']      = vals[5]
+            entry['model']           = int(vals[0])
+            entry['1_hour']          = int(vals[1])
+            entry['10_hour']         = int(vals[2])
+            entry['100_hour']        = int(vals[3])
+            entry['live_herbaceous'] = int(vals[4])
+            entry['live_woody']      = int(vals[5])
             self.fuel_moistures = self.fuel_moistures.append(entry, ignore_index=True)
     
 
@@ -300,7 +314,7 @@ class Case:
         input_file_local = self.name+".input"
         lcp_prefix_local = os.path.join(self.landscape_dir_local, self.name)
         weather_file_local = self.name+".raws"
-        ignit_file_local = os.path.join(self.ignition_dir_local, self.name+".shp")
+        ignition_file_local = os.path.join(self.ignition_dir_local, self.name+".shp")
         run_file_local = "run_"+self.name+".txt"
         job_file_local = "job.slurm"
         out_prefix_local = os.path.join(self.out_dir_local, self.name)
@@ -308,14 +322,14 @@ class Case:
         input_file = os.path.join(self.root_dir, input_file_local)
         lcp_prefix = os.path.join(self.root_dir, lcp_prefix_local)
         weather_file = os.path.join(self.root_dir, weather_file_local)
-        ignit_file = os.path.join(self.root_dir, ignit_file_local)
+        ignition_file = os.path.join(self.root_dir, ignition_file_local)
         run_file = os.path.join(self.root_dir, run_file_local)
         job_file = os.path.join(self.root_dir, job_file_local)
         
         self.writeInput(input_file)
         self.lcp.write(lcp_prefix)
         self.weather.write(weather_file)
-        self.ignit.write(ignit_file)
+        self.ignition.to_file(ignition_file)
         self.sbatch.runfile_name_local = run_file_local
         self.sbatch.write(job_file)
 
@@ -323,7 +337,7 @@ class Case:
             file.write("{0} {1} {2} {3} {4} {5}".format(
                 lcp_prefix_local+".lcp",
                 input_file_local,
-                ignit_file_local,
+                ignition_file_local,
                 0,
                 out_prefix_local,
                 self.out_type))
@@ -338,20 +352,167 @@ class Case:
         return os.path.join(
             self.root_dir,
             self.out_dir_local,
-            self.name + "_" + name + ".asc")
+            self.name + "_" + name)
     
 
+    def __convertAndMergePerimeters(self):
+        self.perimeters_merged = self.perimeters.copy()
+        self.perimeters_merged = self.perimeters_merged[0:0]
+
+        elapsed_minutes = self.perimeters['Elapsed_Mi'][0]
+        polys = []
+
+        for i in range(len(self.perimeters)):
+            # If time has changed, merge existing polygons, write to merged object, and empty list
+            if not np.isclose(self.perimeters['Elapsed_Mi'][i], elapsed_minutes):
+                self.perimeters_merged = self.perimeters_merged.append(
+                    self.perimeters.loc[i-1],
+                    ignore_index=True)
+                self.perimeters_merged.iat[-1, -1] = unary_union(polys)
+                polys = []
+                elapsed_minutes = self.perimeters['Elapsed_Mi'][i]
+            
+            # Add current polygon to list
+            poly = geometry.Polygon(self.perimeters.geometry[i])
+            if not poly.is_valid:
+                poly = poly.buffer(0)
+            polys.append(poly)
+        
+        # Merge remaining polygons and write to merged object
+        self.perimeters_merged = self.perimeters_merged.append(
+            self.perimeters.loc[i],
+            ignore_index=True)
+        self.perimeters_merged.iat[-1, -1] = unary_union(polys)
+
+
     def readOutput(self):
-        self.arrival_time       = ascii_data.ASCIIData(self.__outputFile("ArrivalTime"))
-        self.crown_fire         = ascii_data.ASCIIData(self.__outputFile("CrownFire"))
-        self.flame_length       = ascii_data.ASCIIData(self.__outputFile("FlameLength"))
-        self.heat_per_unit_area = ascii_data.ASCIIData(self.__outputFile("HeatPerUnitArea"))
-        self.ignitions          = ascii_data.ASCIIData(self.__outputFile("Ignitions"))
-        self.intensity          = ascii_data.ASCIIData(self.__outputFile("Intensity"))
-        self.reaction_intensity = ascii_data.ASCIIData(self.__outputFile("ReactionIntensity"))
-        self.spot_grid          = ascii_data.ASCIIData(self.__outputFile("SpotGrid"))
-        self.spread_direction   = ascii_data.ASCIIData(self.__outputFile("SpreadDirection"))
-        self.spread_rate        = ascii_data.ASCIIData(self.__outputFile("SpreadRate"))
+        self.arrival_time       = ascii_data.ASCIIData(self.__outputFile("ArrivalTime.asc"))
+        self.crown_fire         = ascii_data.ASCIIData(self.__outputFile("CrownFire.asc"))
+        self.flame_length       = ascii_data.ASCIIData(self.__outputFile("FlameLength.asc"))
+        self.heat_per_unit_area = ascii_data.ASCIIData(self.__outputFile("HeatPerUnitArea.asc"))
+        self.ignitions          = ascii_data.ASCIIData(self.__outputFile("Ignitions.asc"))
+        self.intensity          = ascii_data.ASCIIData(self.__outputFile("Intensity.asc"))
+        self.reaction_intensity = ascii_data.ASCIIData(self.__outputFile("ReactionIntensity.asc"))
+        self.spot_grid          = ascii_data.ASCIIData(self.__outputFile("SpotGrid.asc"))
+        self.spread_direction   = ascii_data.ASCIIData(self.__outputFile("SpreadDirection.asc"))
+        self.spread_rate        = ascii_data.ASCIIData(self.__outputFile("SpreadRate.asc"))
+        self.spots = gpd.read_file(self.__outputFile("Spots.shp"))
+        self.perimeters = gpd.read_file(self.__outputFile("Perimeters.shp"))
+        self.__convertAndMergePerimeters()
+    
+
+    def renderOutput(self, filename):
+        plt.imshow(
+            self.arrival_time.data,
+            extent=(
+                self.lcp.utm_west,
+                self.lcp.utm_east,
+                self.lcp.utm_south,
+                self.lcp.utm_north))
+        plt.xlabel("y (m)")
+        plt.ylabel("x (m)")
+        plt.savefig(
+            filename,
+            bbox_inches='tight',
+            dpi=300)
+        plt.show()
+    
+
+    def __burnMap(self, perimeter_poly):
+        burn = np.zeros([self.lcp.num_north, self.lcp.num_east])
+        prepared_perimeter = prep(perimeter_poly)
+
+        # Iterate over cells
+        for i in range(self.lcp.num_north):
+            for j in range(self.lcp.num_east):
+                cell = geometry.box(
+                    (j)   * self.lcp.res_x + self.lcp.utm_west,
+                    (i)   * self.lcp.res_y + self.lcp.utm_south,
+                    (j+1) * self.lcp.res_x + self.lcp.utm_west,
+                    (i+1) * self.lcp.res_y + self.lcp.utm_south)
+                if prepared_perimeter.contains(cell):
+                    burn[i,j] = 1.0
+                elif prepared_perimeter.intersects(cell):
+                    burn[i,j] = cell.intersection(perimeter_poly).area / cell.area
+
+        return burn
+    
+
+    def computeBurnMaps(self):
+        n_steps = len(self.perimeters_merged)
+        self.burn = np.zeros([
+            n_steps,
+            self.lcp.num_north,
+            self.lcp.num_east])
+        for i in range(n_steps):
+            print("Computing burn map {0}/{1}".format(i+1, n_steps))
+            self.burn[i] = self.__burnMap(self.perimeters_merged.loc[i].geometry)
+    
+
+    def getOutputTimes(self):
+        times = []
+        for i, entry in self.perimeters_merged.iterrows():
+            times.append(dt.datetime(
+                self.start_time.year,
+                int(entry['Month']),
+                int(entry['Day']),
+                int(str(int(entry['Hour']))[0:2]),
+                int(str(int(entry['Hour']))[2:4])))
+        return times
+    
+
+    def writeMoisture(self, prefix):
+        n_models = np.where(self.lcp.layers['fuel'].vals)[0][-1] + 1
+        models = self.lcp.layers['fuel'].vals[0:n_models]
+
+        moisture_1_hour          = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int32)
+        moisture_10_hour         = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int32)
+        moisture_100_hour        = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int32)
+        moisture_live_herbaceous = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int32)
+        moisture_live_woody      = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int32)
+
+        # Iterate over models in landscape
+        for model in models:
+            # Find where model exists in landscape
+            mask_layer = self.lcp.layers['fuel'].value == model
+
+            # Find moisture data entry for model
+            if model in self.fuel_moistures['model']:
+                mask_moisture = self.fuel_moistures['model'] == model
+            else:
+                mask_moisture = self.fuel_moistures['model'] == 0 # Default to data for model 0
+            
+            # Set moistures in given locations to given model data
+            moisture_1_hour         [mask_layer] = int(self.fuel_moistures['1_hour'         ].loc[mask_moisture])
+            moisture_10_hour        [mask_layer] = int(self.fuel_moistures['10_hour'        ].loc[mask_moisture])
+            moisture_100_hour       [mask_layer] = int(self.fuel_moistures['100_hour'       ].loc[mask_moisture])
+            moisture_live_herbaceous[mask_layer] = int(self.fuel_moistures['live_herbaceous'].loc[mask_moisture])
+            moisture_live_woody     [mask_layer] = int(self.fuel_moistures['live_woody'     ].loc[mask_moisture])
+        
+        # Write
+        np.save(prefix + "_moisture_1_hour.npy",          moisture_1_hour         )
+        np.save(prefix + "_moisture_10_hour.npy",         moisture_10_hour        )
+        np.save(prefix + "_moisture_100_hour.npy",        moisture_100_hour       )
+        np.save(prefix + "_moisture_live_herbaceous.npy", moisture_live_herbaceous)
+        np.save(prefix + "_moisture_live_woody.npy",      moisture_live_woody     )
+    
+
+    def exportData(self, prefix):
+        [out_dir, out_name] = os.path.split(prefix)
+        if not os.path.isdir(out_dir):
+            os.mkdir(out_dir)
+
+        self.lcp.writeNPY(prefix)
+        self.weather.writeWindNPY(
+            prefix,
+            (self.lcp.num_north, self.lcp.num_east),
+            self.getOutputTimes())
+        self.writeMoisture(prefix)
+
+        try:
+            np.save(prefix + "_burn.npy", self.burn)
+        except AttributeError:
+            raise RuntimeError("Burn maps have not yet been computed -- run Case.computeBurnMaps()")
 
 
 def main():
