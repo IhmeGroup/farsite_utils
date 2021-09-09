@@ -5,51 +5,51 @@ import numpy as np
 from shapely.geometry import Polygon
 
 
-def randomUniform(field_shape, low, high):
+def randomUniform(field_shape, low, high, dtype=None):
     """Generate field with uniformly-distrubuted noise."""
 
-    return np.random.uniform(low=low, high=high, size=field_shape)
+    return np.random.uniform(low=low, high=high, size=field_shape, dtype=dtype)
 
 
-def randomInteger(field_shape, low, high):
+def randomInteger(field_shape, low, high, dtype=np.int64):
     """Generate field with uniformly-distributed integer noise."""
 
-    return np.random.randint(low=low, high=high, size=field_shape, dtype=np.int32)
+    return np.random.randint(low=low, high=high, size=field_shape, dtype=dtype)
 
 
-def randomNormal(field_shape, mean=0, stddev=0.25):
+def randomNormal(field_shape, mean=0, stddev=0.25, dtype=None):
     """Generate field with normally-distrubuted noise."""
 
     return np.random.normal(loc=mean, scale=stddev, size=field_shape)
 
 
-def randomFoldedNormal(field_shape, mean=1, stddev=0.25):
+def randomFoldedNormal(field_shape, mean=1, stddev=0.25, dtype=None):
     """Generate field with folded normally-distributed noise."""
 
-    return np.abs(randomNormal(field_shape, mean, stddev))
+    return np.abs(randomNormal(field_shape, mean, stddev, dtype))
 
 
-def randomBool(field_shape, p=0.5, out_type=bool):
+def randomBool(field_shape, p=0.5, dtype=bool):
     """Generate field with boolean values, given probability of True."""
 
     raw = np.random.rand(*field_shape)
     field = np.less_equal(raw, p)
-    return field.astype(out_type)
+    return field.astype(dtype)
 
 
-def randomChoice(field_shape, vals):
+def randomChoice(field_shape, vals, dtype=None):
     """Generate field selecting random value from list of given vals."""
 
-    return np.random.choice(vals, field_shape)
+    return np.random.choice(vals, field_shape).astype(dtype)
 
 
-def randomPatchy(field_shape, d, p_large, p_small, mean=1, stdev=0.25):
+def randomPatchy(field_shape, d, p_large, p_small, mean=1, stdev=0.25, dtype=None):
     """Generate patchy field."""
 
     A_field = field_shape[0] * field_shape[1]
     A_patch = np.pi * d**2
 
-    field = np.zeros(field_shape)
+    field = np.zeros(field_shape, dtype=dtype)
     field_with_patches = np.zeros(field_shape, dtype=bool)
     p_actual = 0
 
@@ -69,13 +69,13 @@ def randomPatchy(field_shape, d, p_large, p_small, mean=1, stdev=0.25):
 
         p_actual = np.sum(field_with_patches) / (field_shape[0] * field_shape[1])
 
-    field = field_with_patches * np.random.normal(loc=mean, scale=stdev, size=field_shape)
+    field = field_with_patches * np.random.normal(loc=mean, scale=stdev, size=field_shape, dtype=dtype)
     field *= density_bool(field_shape, p_small)
     field = np.abs(field)
     return field
 
 
-def gradient(field_shape, aspect, slope):
+def gradient(field_shape, aspect, slope, dtype=None):
     """Generate field with constant given slope in given direction.
     All angles in radians."""
 
@@ -88,7 +88,8 @@ def gradient(field_shape, aspect, slope):
     [X, Y] = np.meshgrid(x, y)
 
     field = (plane_norm[0]*X + plane_norm[1]*Y) / plane_norm[2]
-    return field - np.amin(field)
+    field -= np.amin(field)
+    return field.astype(dtype)
 
 
 def _diamondStep(field, temp_field_size, size, half, n, roughness, height):
@@ -134,7 +135,7 @@ def _squareStep(field, temp_field_size, size, half, n, roughness, height):
     return field
 
 
-def diamondSquare(field_shape, height, roughness):
+def diamondSquare(field_shape, height, roughness, dtype=None):
     """Generate random field using diamond-square algorithm."""
 
     if field_shape[0] != field_shape[1]:
@@ -170,7 +171,9 @@ def diamondSquare(field_shape, height, roughness):
     field = field[padding:temp_field_size-1, padding:temp_field_size-1]
 
     # Shift field vertically by setting lowest point to 0
-    return field - np.amin(field)
+    field -= np.amin(field)
+
+    return field.astype(dtype)
 
 
 def regularPolygon(sides, radius, rotation=0, translation=(0, 0)):

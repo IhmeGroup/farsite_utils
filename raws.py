@@ -26,8 +26,7 @@ class RAWS:
         self.elevation = 0
         self.units = Unit.ENGLISH
         self.count = 0
-        self._data = pd.DataFrame(
-            columns = _DATA_COLS)
+        self.data = pd.DataFrame(columns = _DATA_COLS)
 
         if filename:
             self.read(filename)

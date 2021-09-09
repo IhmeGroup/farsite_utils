@@ -44,7 +44,8 @@ class LineType(Enum):
 class Case:
     def __init__(self, jobfile_name=None):
         # Inputs
-        self._name = "case"
+        self.sbatch = sbatch.SBatch()
+        self.name = "case"
         self.root_dir = "./"
         self.out_dir_local = "output/"
         self.landscape_dir_local = "landscape/"
@@ -63,7 +64,7 @@ class Case:
         self.spotting_seed = 0
         self.acceleration_on = True
         self.fuel_moistures_count = 0
-        self._fuel_moistures = pd.DataFrame(columns = _MOISTURES_COLS)
+        self.fuel_moistures = pd.DataFrame(columns = _MOISTURES_COLS)
         self.weather = raws.RAWS()
         self.foliar_moisture_content = 100
         self.crown_fire_method = CrownFireMethod.FINNEY
@@ -71,7 +72,6 @@ class Case:
         self.lcp = landscape.Landscape()
         self.ignition = gpd.GeoDataFrame()
         self.out_type = 0
-        self.sbatch = sbatch.SBatch()
 
         # Outputs
         self.arrival_time       = ascii_data.ASCIIData()
@@ -103,6 +103,8 @@ class Case:
 
     @name.setter
     def name(self, value):
+        if not isinstance(value, str):
+            raise TypeError("Case.name must be a string")
         self._name = value
         self.sbatch.set_option("-J", value)
     
@@ -496,7 +498,7 @@ class Case:
         for i in range(n_steps):
             print("Computing burn map {0}/{1}".format(i+1, n_steps))
             self.burn[i] = self.__burnMap(self.perimeters_merged.loc[i].geometry)
-    
+
 
     def getOutputTimes(self):
         times = []
@@ -514,16 +516,16 @@ class Case:
         n_models = np.where(self.lcp.layers['fuel'].vals)[0][-1] + 1
         models = self.lcp.layers['fuel'].vals[0:n_models]
 
-        moisture_1_hour          = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int32)
-        moisture_10_hour         = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int32)
-        moisture_100_hour        = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int32)
-        moisture_live_herbaceous = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int32)
-        moisture_live_woody      = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int32)
+        moisture_1_hour          = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int16)
+        moisture_10_hour         = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int16)
+        moisture_100_hour        = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int16)
+        moisture_live_herbaceous = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int16)
+        moisture_live_woody      = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int16)
 
         # Iterate over models in landscape
         for model in models:
             # Find where model exists in landscape
-            mask_layer = self.lcp.layers['fuel'].value == model
+            mask_layer = self.lcp.layers['fuel'].data == model
 
             # Find moisture data entry for model
             if model in self.fuel_moistures['model']:
@@ -544,7 +546,7 @@ class Case:
         np.save(prefix + "_moisture_100_hour.npy",        moisture_100_hour       )
         np.save(prefix + "_moisture_live_herbaceous.npy", moisture_live_herbaceous)
         np.save(prefix + "_moisture_live_woody.npy",      moisture_live_woody     )
-    
+
 
     def exportData(self, prefix):
         [out_dir, out_name] = os.path.split(prefix)
