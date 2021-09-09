@@ -44,15 +44,35 @@ class _Layer:
         self.vals = np.zeros(_NUM_VALS, dtype=np.int32)
         self.unit_opts = 0
         self.file = ""
-        self.value = np.zeros([_NUM_NORTH_DEFAULT, _NUM_EAST_DEFAULT], dtype=np.int16)
+        self._value = np.zeros([_NUM_NORTH_DEFAULT, _NUM_EAST_DEFAULT], dtype=np.int16)
 
 
     def __str__(self):
         return str(self.__class__) + ": " + str(self.__dict__)
 
 
+    @property
     def shape(self):
-        return self.value.shape()
+        return self.value.shape
+
+
+    @property
+    def value(self):
+        return self._value
+    
+
+    @value.setter
+    def value(self, given_value):
+        self.lo = np.amin(given_value)
+        self.hi = np.amax(given_value)
+        self.vals = np.zeros(_NUM_VALS, dtype=np.int32)
+        vals_unique = np.unique(given_value)
+        if len(vals_unique) > 100:
+            self.num = -1
+        else:
+            self.num = len(vals_unique)
+            self.vals[0:self.num] = vals_unique
+        self._value = given_value
 
 
 class Landscape:
@@ -96,6 +116,23 @@ class Landscape:
 
     def __str__(self):
         return str(self.__class__) + ": " + str(self.__dict__)
+    
+
+    @property
+    def shape(self):
+        return self.value.shape
+
+
+    @property
+    def center(self):
+        return ((self.utm_west  + self.utm_east)  / 2.0,
+                (self.utm_south + self.utm_north) / 2.0)
+
+
+    @property
+    def size(self):
+        return ((self.utm_east -  self.utm_west),
+                (self.utm_north - self.utm_south))
 
 
     def crownPresent(self):
@@ -201,7 +238,7 @@ class Landscape:
         file.write(struct.pack('iii', self.crown_fuels, self.ground_fuels, self.latitude))
         file.write(struct.pack('dddd', self.lo_east, self.hi_east, self.lo_north, self.hi_north))
 
-        for (i, layer) in enumerate(self.layers):
+        for layer in self.layers.values():
             file.write(_buildLoHiNumVal(layer.lo, layer.hi, layer.num, layer.vals))
         
         file.write(struct.pack('ii', self.num_east, self.num_north))
@@ -209,10 +246,10 @@ class Landscape:
         file.write(struct.pack('i', self.units_grid))
         file.write(struct.pack('dd', self.res_x, self.res_y))
 
-        unit_opts_arr = [layer.unit_opts for layer in self.layers]
+        unit_opts_arr = [layer.unit_opts for layer in self.layers.values()]
         file.write(struct.pack('hhhhhhhhhh', *unit_opts_arr))
 
-        for layer in self.layers:
+        for layer in self.layers.values():
             file.write(_buildEncodedString(layer.file, _FILE_LENGTH))
         
         file.write(_buildEncodedString(self.description, _DESCRIPTION_LENGTH))
@@ -264,16 +301,6 @@ class Landscape:
     def writeNPY(self, prefix):
         for name, layer in self.layers.items():
             np.save(prefix + "_" + name, layer.value)
-    
-
-    def center(self):
-        return ((self.utm_west  + self.utm_east)  / 2.0,
-                (self.utm_south + self.utm_north) / 2.0)
-    
-
-    def size(self):
-        return ((self.utm_east -  self.utm_west),
-                (self.utm_north - self.utm_south))
 
 
 def main():

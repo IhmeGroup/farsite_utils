@@ -5,6 +5,18 @@ import numpy as np
 from shapely.geometry import Polygon
 
 
+def randomUniform(field_shape, low, high):
+    """Generate field with uniformly-distrubuted noise."""
+
+    return np.random.uniform(low=low, high=high, size=field_shape)
+
+
+def randomInteger(field_shape, low, high):
+    """Generate field with uniformly-distributed integer noise."""
+
+    return np.random.randint(low=low, high=high, size=field_shape, dtype=np.int32)
+
+
 def randomNormal(field_shape, mean=0, stddev=0.25):
     """Generate field with normally-distrubuted noise."""
 
@@ -23,6 +35,12 @@ def randomBool(field_shape, p=0.5, out_type=bool):
     raw = np.random.rand(*field_shape)
     field = np.less_equal(raw, p)
     return field.astype(out_type)
+
+
+def randomChoice(field_shape, vals):
+    """Generate field selecting random value from list of given vals."""
+
+    return np.random.choice(vals, field_shape)
 
 
 def randomPatchy(field_shape, d, p_large, p_small, mean=1, stdev=0.25):
@@ -153,6 +171,7 @@ def diamondSquare(field_shape, height, roughness):
 
     # Shift field vertically by setting lowest point to 0
     return field - np.amin(field)
+
 
 def regularPolygon(sides, radius, rotation=0, translation=(0, 0)):
     theta = 2 * np.pi / sides

@@ -10,6 +10,7 @@ from shapely.ops import unary_union
 from shapely.prepared import prep
 import numpy as np
 import matplotlib.pyplot as plt
+from collections import Counter
 
 import landscape
 import raws
@@ -20,6 +21,13 @@ import generate as gen
 
 
 _DEFAULT_YEAR = 2000
+_MOISTURES_COLS = [
+    'model',
+    '1_hour',
+    '10_hour',
+    '100_hour',
+    'live_herbaceous',
+    'live_woody']
 
 
 class CrownFireMethod(Enum):
@@ -36,7 +44,7 @@ class LineType(Enum):
 class Case:
     def __init__(self, jobfile_name=None):
         # Inputs
-        self.name = "case"
+        self._name = "case"
         self.root_dir = "./"
         self.out_dir_local = "output/"
         self.landscape_dir_local = "landscape/"
@@ -54,15 +62,8 @@ class Case:
         self.minimum_spot_distance = 30
         self.spotting_seed = 0
         self.acceleration_on = True
-        self.fuel_moistures_data = 0
-        self.fuel_moistures = pd.DataFrame(columns = [
-            "model",
-            "1_hour",
-            "10_hour",
-            "100_hour",
-            "live_herbaceous",
-            "live_woody"
-        ])
+        self.fuel_moistures_count = 0
+        self._fuel_moistures = pd.DataFrame(columns = _MOISTURES_COLS)
         self.weather = raws.RAWS()
         self.foliar_moisture_content = 100
         self.crown_fire_method = CrownFireMethod.FINNEY
@@ -95,9 +96,31 @@ class Case:
         return str(self.__class__) + ": " + str(self.__dict__)
     
 
-    def setName(self, name):
-        self.name = name
-        self.sbatch.set_option("-J", name)
+    @property
+    def name(self):
+        return self._name
+    
+
+    @name.setter
+    def name(self, value):
+        self._name = value
+        self.sbatch.set_option("-J", value)
+    
+
+    @property
+    def fuel_moistures(self):
+        return self._fuel_moistures
+    
+
+    @fuel_moistures.setter
+    def fuel_moistures(self, value):
+        if not (Counter(value.columns) == Counter(_MOISTURES_COLS)):
+            raise ValueError(
+                "Data must have the following columns: " +
+                [i + ", " for i in _MOISTURES_COLS[:-1]] +
+                _MOISTURES_COLS[-1])
+        self._fuel_moistures = value
+        self.fuel_moistures_count = len(value.index)
     
 
     def read(self, jobfile_name):
@@ -112,7 +135,7 @@ class Case:
         self.ignition = gpd.read_file(os.path.join(self.root_dir, args[2]))
         out_prefix_local = args[4]
         [self.out_dir_local, name] = os.path.split(out_prefix_local)
-        self.setName(name)
+        self.name = name
         self.out_type = int(args[5])
     
 
@@ -136,8 +159,9 @@ class Case:
     
 
     def __writeInputMoisture(self, file):
-        file.write("FUEL_MOISTURES_DATA: {0}\n".format(self.fuel_moistures_data))
+        file.write("FUEL_MOISTURES_DATA: {0}\n".format(self.fuel_moistures_count))
         for i in range(len(self.fuel_moistures)):
+            # TODO - fixed length
             file.write("{0} {1} {2} {3} {4} {5}\n".format(
                 self.fuel_moistures.loc[i]['model'],
                 self.fuel_moistures.loc[i]['1_hour'],
@@ -286,9 +310,9 @@ class Case:
                 elif line_type == LineType.NAME_VALUE:
                     [name, val] = self.__parseNameValLine(line)
                     if name == "FUEL_MOISTURES_DATA":
-                        self.fuel_moistures_data = int(val)
+                        self.fuel_moistures_count = int(val)
                         lines = []
-                        for i in range(self.fuel_moistures_data):
+                        for i in range(self.fuel_moistures_count):
                             lines.append(file.readline())
                         self.__readMoistureLines(lines)
                     else:
@@ -303,13 +327,13 @@ class Case:
         out_dir = os.path.join(self.root_dir, self.out_dir_local)
 
         if not os.path.isdir(self.root_dir):
-            os.mkdir(self.root_dir)
+            os.makedirs(self.root_dir, exist_ok=True)
         if not os.path.isdir(landscape_dir):
-            os.mkdir(landscape_dir)
+            os.makedirs(landscape_dir, exist_ok=True)
         if not os.path.isdir(ignition_dir):
-            os.mkdir(ignition_dir)
+            os.makedirs(ignition_dir, exist_ok=True)
         if not os.path.isdir(out_dir):
-            os.mkdir(out_dir)
+            os.makedirs(out_dir, exist_ok=True)
         
         input_file_local = self.name+".input"
         lcp_prefix_local = os.path.join(self.landscape_dir_local, self.name)
@@ -344,8 +368,33 @@ class Case:
     
 
     def run(self):
+        current_dir = os.getcwd()
         os.chdir(self.root_dir)
         os.system("sbatch " + self.jobfile_name_local)
+        os.chdir(current_dir)
+    
+
+    def isDone(self):
+        files = os.listdir(self.root_dir)
+
+        # Find log file, if it exists
+        log_file = None
+        for file in files:
+            if ".out" in file:
+                log_file = file
+        
+        # If log file does not exist, run is not done
+        if not log_file:
+            return False
+        
+        # Read log file for output line, done if found
+        with open(os.path.join(self.root_dir, log_file), "r") as file:
+            for line in file:
+                if "Writing outputs" in line:
+                    return True
+        
+        # Not done if output line not found
+        return False
     
 
     def __outputFile(self, name):
@@ -500,7 +549,7 @@ class Case:
     def exportData(self, prefix):
         [out_dir, out_name] = os.path.split(prefix)
         if not os.path.isdir(out_dir):
-            os.mkdir(out_dir)
+            os.makedirs(out_dir, exist_ok=True)
 
         self.lcp.writeNPY(prefix)
         self.weather.writeWindNPY(

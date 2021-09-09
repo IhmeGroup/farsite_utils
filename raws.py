@@ -3,10 +3,18 @@ from enum import Enum
 import datetime as dt
 import numpy as np
 import pandas as pd
+from collections import Counter
 
 
 _HEADER_LINES = 3
-
+_DATA_COLS = [
+    'time',
+    'temperature',
+    'humidity',
+    'precipitation',
+    'wind_speed',
+    'wind_direction',
+    'cloud_cover']
 
 class Unit(Enum):
     ENGLISH = 1
@@ -18,20 +26,31 @@ class RAWS:
         self.elevation = 0
         self.units = Unit.ENGLISH
         self.count = 0
-        self.data = pd.DataFrame(
-            columns = ["time",
-                       "temperature",
-                       "humidity",
-                       "precipitation",
-                       "wind_speed",
-                       "wind_direction",
-                       "cloud_cover"])
+        self._data = pd.DataFrame(
+            columns = _DATA_COLS)
 
         if filename:
             self.read(filename)
     
+
     def __str__(self):
         return str(self.__class__) + ": " + str(self.__dict__)
+    
+    
+    @property
+    def data(self):
+        return self._data
+    
+
+    @data.setter
+    def data(self, value):
+        if not (Counter(value.columns) == Counter(_DATA_COLS)):
+            raise ValueError(
+                "Data must have the following columns: " +
+                [i + ", " for i in _DATA_COLS[:-1]] +
+                _DATA_COLS[-1])
+        self._data = value
+        self.count = len(value.index)
     
 
     def __parseHeaderLine(self, line):
@@ -89,11 +108,11 @@ class RAWS:
         for i in range(self.count):
             line = file.readline()
             entry = self.__parseBodyLine(line)
-            self.data = self.data.append(entry, ignore_index=True)
+            self._data = self._data.append(entry, ignore_index=True)
 
 
     def read(self, filename):
-        self.data = self.data[0:0]
+        self._data = self._data[0:0]
         with open(filename, "r") as file:
             self.__parseHeader(file)
             self.__parseBody(file)
@@ -122,7 +141,7 @@ class RAWS:
 
     def __writeBody(self, file):
         for i in range(self.count):
-            self.__writeBodyLine(file, self.data.loc[i])
+            self.__writeBodyLine(file, self._data.loc[i])
     
     
     def write(self, filename):
@@ -133,16 +152,16 @@ class RAWS:
 
     def writeWindNPY(self, prefix, shape, query_times=None):
         if not query_times:
-            query_times = [self.data.loc[0, 'time']]
+            query_times = [self._data.loc[0, 'time']]
         
         # Convert datetimes to elapsed seconds
-        epoch = self.data.loc[0, 'time']
+        epoch = self._data.loc[0, 'time']
         query_times_secs = [(time - epoch).total_seconds() for time in query_times]
-        raws_times_secs = [(time.to_pydatetime() - epoch).total_seconds() for time in self.data['time']]
+        raws_times_secs = [(time.to_pydatetime() - epoch).total_seconds() for time in self._data['time']]
 
         # Interpolate data at query times
-        wind_speed     = np.interp(query_times_secs, raws_times_secs, list(self.data['wind_speed']))
-        wind_direction = np.interp(query_times_secs, raws_times_secs, list(self.data['wind_direction']))
+        wind_speed     = np.interp(query_times_secs, raws_times_secs, list(self._data['wind_speed']))
+        wind_direction = np.interp(query_times_secs, raws_times_secs, list(self._data['wind_direction']))
 
         # Compute components from speed and direction
         wind_east  = np.zeros([len(query_times), shape[0], shape[1]])

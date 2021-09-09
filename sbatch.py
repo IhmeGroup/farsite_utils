@@ -69,8 +69,7 @@ class SBatch:
             _Option("-o", "%x.%j.out"),
             _Option("-N", 1),
             _Option("-n", 1),
-            _Option("-t", dt.timedelta(hours=2))
-        ]
+            _Option("-t", dt.timedelta(hours=2))]
         self.echoline = ""
         self.exec = []
         self.runfile_name_local = ""
