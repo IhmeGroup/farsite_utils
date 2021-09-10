@@ -2,13 +2,13 @@
 
 import math
 import numpy as np
-from shapely.geometry import Polygon
+from shapely import geometry
 
 
 def randomUniform(field_shape, low, high, dtype=None):
     """Generate field with uniformly-distrubuted noise."""
 
-    return np.random.uniform(low=low, high=high, size=field_shape, dtype=dtype)
+    return np.random.uniform(low=low, high=high, size=field_shape).astype(dtype)
 
 
 def randomInteger(field_shape, low, high, dtype=np.int64):
@@ -43,35 +43,46 @@ def randomChoice(field_shape, vals, dtype=None):
     return np.random.choice(vals, field_shape).astype(dtype)
 
 
-def randomPatchy(field_shape, d, p_large, p_small, mean=1, stdev=0.25, dtype=None):
+def randomPatchy(field_shape, vals, base, p_filled, patch_sides, patch_radius_mean, patch_radius_stdev=0, dtype=None):
     """Generate patchy field."""
 
     A_field = field_shape[0] * field_shape[1]
-    A_patch = np.pi * d**2
 
-    field = np.zeros(field_shape, dtype=dtype)
-    field_with_patches = np.zeros(field_shape, dtype=bool)
+    field = (np.zeros(field_shape) + base).astype(dtype)
+    field_bool = np.zeros(field_shape, dtype=bool)
+
     p_actual = 0
+    while p_actual < p_filled:
 
-    x = np.arange(field_shape[0])
-    y = np.arange(field_shape[1])
-    X,Y = np.meshgrid(x,y)
-    
-    while p_actual <= p_large:
-        loc = np.round(np.random.rand(2) * np.array(field_shape))
+        # Choose fuel model to apply
+        val_current = np.random.choice(vals)
 
-        X_dist = X - loc[0]
-        Y_dist = Y - loc[1]
-        R = np.sqrt(X_dist**2 + Y_dist**2)
+        # Generate patch
+        radius = np.random.normal(loc=patch_radius_mean, scale=patch_radius_stdev)
+        rotation = np.random.uniform(0.0, 360.0)
+        translation = (
+            np.random.uniform(0, field_shape[0]),
+            np.random.uniform(0, field_shape[1]))
+        patch = regularPolygon(patch_sides, radius, rotation, translation)
+
+        # Restrict search bounds to bounding box of patch in field
+        search_bounds_x = (
+            int(np.max((np.floor(patch.bounds[0]),  0))),
+            int(np.min((np.ceil (patch.bounds[2]), field_shape[0]))))
+        search_bounds_y = (
+            int(np.max((np.floor(patch.bounds[1]), 0))),
+            int(np.min((np.ceil (patch.bounds[3]), field_shape[1]))))
+
+        # Apply fuel model in region covered by patch
+        for i in range(*search_bounds_x):
+            for j in range(*search_bounds_y):
+                if patch.contains(geometry.Point(i, j)):
+                    field[i,j] = val_current
+                    field_bool[i,j] = True
         
-        patch_bool = np.less_equal(R, d/2)
-        field_with_patches = np.logical_or(field_with_patches, patch_bool)
-
-        p_actual = np.sum(field_with_patches) / (field_shape[0] * field_shape[1])
-
-    field = field_with_patches * np.random.normal(loc=mean, scale=stdev, size=field_shape, dtype=dtype)
-    field *= density_bool(field_shape, p_small)
-    field = np.abs(field)
+        # Check covered area
+        p_actual = np.count_nonzero(field_bool) / A_field
+    
     return field
 
 
@@ -177,8 +188,25 @@ def diamondSquare(field_shape, height, roughness, dtype=None):
 
 
 def regularPolygon(sides, radius, rotation=0, translation=(0, 0)):
+    """Generate regular shapely polygon."""
+
     theta = 2 * np.pi / sides
     points = [[np.sin(theta * i + rotation) * radius + translation[0],
                np.cos(theta * i + rotation) * radius + translation[1]] for i in range(sides)]
     
-    return Polygon(points)
+    return geometry.Polygon(points)
+
+
+def setBorder(field, thickness, value):
+    """Set border of field with given thickness to given value."""
+
+    if thickness < 0:
+        raise ValueError("Border thickness must be positive")
+    elif thickness == 0:
+        return field.copy
+    field_new = field.copy()
+    field_new[0:thickness, :] = value
+    field_new[-thickness:, :] = value
+    field_new[:, 0:thickness] = value
+    field_new[:, -thickness:] = value
+    return field_new

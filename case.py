@@ -9,25 +9,38 @@ from shapely import geometry
 from shapely.ops import unary_union
 from shapely.prepared import prep
 import numpy as np
-import matplotlib.pyplot as plt
 from collections import Counter
+import matplotlib.pyplot as plt
+import matplotlib.font_manager
 
 import landscape
 import raws
-import ignition
 import sbatch
 import ascii_data
 import generate as gen
 
+plt.rcParams.update({
+    "text.usetex": True,
+    "font.family": "serif",
+    "font.serif": ["Computer Modern Roman"],
+})
+
+_XSMALL_SIZE = 12
+_SMALL_SIZE = 14
+_MEDIUM_SIZE = 16
+_BIGGER_SIZE = 18
+
+plt.rc('font', size=_SMALL_SIZE)          # controls default text sizes
+plt.rc('axes', titlesize=_SMALL_SIZE)     # fontsize of the axes title
+plt.rc('axes', labelsize=_MEDIUM_SIZE)    # fontsize of the x and y labels
+plt.rc('xtick', labelsize=_SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=_SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('legend', fontsize=_XSMALL_SIZE)   # legend fontsize
+plt.rc('figure', titlesize=_BIGGER_SIZE)  # fontsize of the figure title
 
 _DEFAULT_YEAR = 2000
-_MOISTURES_COLS = [
-    'model',
-    '1_hour',
-    '10_hour',
-    '100_hour',
-    'live_herbaceous',
-    'live_woody']
+_BURN_PERIODS_COLS = ['start', 'end']
+_FUEL_MOISTURES_COLS = ['model', '1_hour', '10_hour', '100_hour', 'live_herbaceous', 'live_woody']
 
 
 class CrownFireMethod(Enum):
@@ -53,6 +66,8 @@ class Case:
         self.jobfile_name_local = "job.slurm"
         self.start_time = dt.datetime(_DEFAULT_YEAR, 1, 1)
         self.end_time = dt.datetime(_DEFAULT_YEAR, 1, 1)
+        self.burn_periods_count = 0
+        self.burn_periods = pd.DataFrame(columns = _BURN_PERIODS_COLS)
         self.timestep = 60
         self.distance_res = 30.0
         self.perimeter_res = 60.0
@@ -64,7 +79,7 @@ class Case:
         self.spotting_seed = 0
         self.acceleration_on = True
         self.fuel_moistures_count = 0
-        self.fuel_moistures = pd.DataFrame(columns = _MOISTURES_COLS)
+        self.fuel_moistures = pd.DataFrame(columns = _FUEL_MOISTURES_COLS)
         self.weather = raws.RAWS()
         self.foliar_moisture_content = 100
         self.crown_fire_method = CrownFireMethod.FINNEY
@@ -110,17 +125,29 @@ class Case:
     
 
     @property
+    def burn_periods(self):
+        return self._burn_periods
+    
+
+    @burn_periods.setter
+    def burn_periods(self, value):
+        if not (Counter(value.columns) == Counter(_BURN_PERIODS_COLS)):
+            raise ValueError(
+                "Data must have the following columns: " + ", ".join(_BURN_PERIODS_COLS))
+        self._burn_periods = value
+        self.burn_periods_count = len(value.index)
+    
+
+    @property
     def fuel_moistures(self):
         return self._fuel_moistures
     
 
     @fuel_moistures.setter
     def fuel_moistures(self, value):
-        if not (Counter(value.columns) == Counter(_MOISTURES_COLS)):
+        if not (Counter(value.columns) == Counter(_FUEL_MOISTURES_COLS)):
             raise ValueError(
-                "Data must have the following columns: " +
-                [i + ", " for i in _MOISTURES_COLS[:-1]] +
-                _MOISTURES_COLS[-1])
+                "Data must have the following columns: " + ", ".join(_FUEL_MOISTURES_COLS))
         self._fuel_moistures = value
         self.fuel_moistures_count = len(value.index)
     
@@ -153,26 +180,36 @@ class Case:
             self.end_time.day,
             self.end_time.hour,
             self.end_time.minute))
-        file.write("FARSITE_TIMESTEP: {0}\n".format(self.timestep))
+        file.write("FARSITE_TIMESTEP: {0:d}\n".format(self.timestep))
         file.write("FARSITE_DISTANCE_RES: {0:.1f}\n".format(self.distance_res))
         file.write("FARSITE_PERIMETER_RES: {0:.1f}\n".format(self.perimeter_res))
         file.write("FARSITE_MIN_IGNITION_VERTEX_DISTANCE: {0:.1f}\n".format(self.min_ignition_vertex_distance))
-        file.write("NUMBER_PROCESSORS: {0}\n".format(self.number_processors))
-    
+        file.write("NUMBER_PROCESSORS: {0:d}\n".format(self.number_processors))
 
-    def __writeInputMoisture(self, file):
-        file.write("FUEL_MOISTURES_DATA: {0}\n".format(self.fuel_moistures_count))
-        for i in range(len(self.fuel_moistures)):
-            # TODO - fixed length
+
+    def __writeInputBurnPeriods(self, file):
+        file.write("FARSITE_BURN_PERIODS: {0:d}\n".format(self.burn_periods_count))
+        for i in range(self.burn_periods_count):
+            file.write("{0:02d} {1:02d} {2:02d}{3:02d} {4:02d}{5:02d}\n".format(
+                self.burn_periods.loc[i]['start'].month,
+                self.burn_periods.loc[i]['start'].day,
+                self.burn_periods.loc[i]['start'].hour,
+                self.burn_periods.loc[i]['start'].minute,
+                self.burn_periods.loc[i]['end'].hour,
+                self.burn_periods.loc[i]['end'].minute))
+
+
+    def __writeInputFuelMoistures(self, file):
+        file.write("FUEL_MOISTURES_DATA: {0:d}\n".format(self.fuel_moistures_count))
+        for i in range(self.fuel_moistures_count):
             file.write("{0} {1} {2} {3} {4} {5}\n".format(
                 self.fuel_moistures.loc[i]['model'],
                 self.fuel_moistures.loc[i]['1_hour'],
                 self.fuel_moistures.loc[i]['10_hour'],
                 self.fuel_moistures.loc[i]['100_hour'],
                 self.fuel_moistures.loc[i]['live_herbaceous'],
-                self.fuel_moistures.loc[i]['live_woody'],
-            ))
-    
+                self.fuel_moistures.loc[i]['live_woody']))
+
 
     def __writeInputSpotting(self, file):
         file.write("FARSITE_SPOT_GRID_RESOLUTION: {0:.1f}\n".format(self.spot_grid_resolution))
@@ -197,9 +234,12 @@ class Case:
         with open(filename, "w") as file:
             self.__writeInputHeader(file)
             file.write("\n\n")
+            if self.burn_periods_count > 0:
+                self.__writeInputBurnPeriods(file)
+                file.write("\n\n")
             self.__writeInputSpotting(file)
             file.write("\n\n")
-            self.__writeInputMoisture(file)
+            self.__writeInputFuelMoistures(file)
             file.write("\n\n")
             self.__writeInputWeather(file)
             file.write("\n\n")
@@ -288,6 +328,25 @@ class Case:
             self.number_processors = int(val)
     
 
+    def __readBurnPeriodsLines(self, lines):
+        for line in lines:
+            vals = self.__parseListLine(line)
+            entry = {}
+            entry['start'] = dt.datetime(
+                year   = _DEFAULT_YEAR,
+                month  = int(vals[0]),
+                day    = int(vals[1]),
+                hour   = int(vals[2][0:2]),
+                minute = int(vals[2][2:4]))
+            entry['end'] = dt.datetime(
+                year   = _DEFAULT_YEAR,
+                month  = int(vals[0]),
+                day    = int(vals[1]),
+                hour   = int(vals[3][0:2]),
+                minute = int(vals[3][2:4]))
+            self.burn_periods = self.burn_periods.append(entry, ignore_index=True)
+    
+
     def __readMoistureLines(self, lines):
         for line in lines:
             vals = self.__parseListLine(line)
@@ -311,6 +370,12 @@ class Case:
                     continue
                 elif line_type == LineType.NAME_VALUE:
                     [name, val] = self.__parseNameValLine(line)
+                    if name == "FARSITE_BURN_PERIODS":
+                        self.burn_periods_count = int(val)
+                        lines = []
+                        for i in range(self.burn_periods_count):
+                            lines.append(file.readline())
+                        self.__readBurnPeriodsLines(lines)
                     if name == "FUEL_MOISTURES_DATA":
                         self.fuel_moistures_count = int(val)
                         lines = []
@@ -452,17 +517,53 @@ class Case:
         self.__convertAndMergePerimeters()
     
 
+    def __plotPerimeters(self, ax, n_perimeters):
+        plot_interval = int(np.round(len(self.perimeters_merged.geometry) / n_perimeters))
+        for i, per in enumerate(self.perimeters_merged.geometry):
+            if i % plot_interval:
+                continue
+
+            if isinstance(per, geometry.MultiPolygon):
+                polys = list(per)
+            else:
+                polys = [per]
+            
+            # import code; code.interact(local=locals())
+
+            for poly in polys:
+                x, y = poly.exterior.xy
+                x_scaled = np.array(x) / 1000.0
+                y_scaled = np.array(y) / 1000.0
+                ax.plot(x_scaled, y_scaled, color='k', linewidth=1)
+    
+
     def renderOutput(self, filename):
-        plt.imshow(
-            self.arrival_time.data,
-            extent=(
-                self.lcp.utm_west,
-                self.lcp.utm_east,
-                self.lcp.utm_south,
-                self.lcp.utm_north))
-        plt.xlabel("y (m)")
-        plt.ylabel("x (m)")
-        plt.savefig(
+        fig, axs = plt.subplots(2, 2)
+        extent = (
+            self.lcp.utm_west  / 1000.0,
+            self.lcp.utm_east  / 1000.0,
+            self.lcp.utm_south / 1000.0,
+            self.lcp.utm_north / 1000.0)
+        
+        im1 = axs[0,0].imshow(self.arrival_time.data, extent=extent)
+        plt.colorbar(im1, ax=axs[0,0], label="Arrival Time (min)")
+
+        im2 = axs[0,1].imshow(self.lcp.layers['elevation'].data, extent=extent)
+        plt.colorbar(im2, ax=axs[0,1], label="Elevation (m)")
+
+        im3 = axs[1,0].imshow(self.lcp.layers['fuel'].data, extent=extent)
+        plt.colorbar(im3, ax=axs[1,0], label="Fuel Model")
+
+        im4 = axs[1,1].imshow(self.spread_rate.data, extent=extent)
+        plt.colorbar(im4, ax=axs[1,1], label="Spread Rate (m/s)")
+
+        for ax in axs.reshape(-1):
+            self.__plotPerimeters(ax, 5)
+            ax.set_xlabel("y (km)")
+            ax.set_ylabel("x (km)")
+        
+        fig.tight_layout()
+        fig.savefig(
             filename,
             bbox_inches='tight',
             dpi=300)
@@ -507,14 +608,20 @@ class Case:
                 self.start_time.year,
                 int(entry['Month']),
                 int(entry['Day']),
-                int(str(int(entry['Hour']))[0:2]),
-                int(str(int(entry['Hour']))[2:4])))
+                int("{0:04d}".format(int(entry['Hour']))[0:2]),
+                int("{0:04d}".format(int(entry['Hour']))[2:4])))
         return times
     
 
-    def writeMoisture(self, prefix):
-        n_models = np.where(self.lcp.layers['fuel'].vals)[0][-1] + 1
-        models = self.lcp.layers['fuel'].vals[0:n_models]
+    def writeMoistureNPY(self, prefix):
+        nonzero = np.where(self.lcp.layers['fuel'].vals)[0]
+        if nonzero.size == 0:
+            models = [0]
+        else:
+            n_models = nonzero[-1] + 1
+            models = self.lcp.layers['fuel'].vals[0:n_models]
+        
+        # TODO - convert to dict
 
         moisture_1_hour          = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int16)
         moisture_10_hour         = np.zeros([self.lcp.num_north, self.lcp.num_east], dtype=np.int16)
@@ -528,11 +635,11 @@ class Case:
             mask_layer = self.lcp.layers['fuel'].data == model
 
             # Find moisture data entry for model
-            if model in self.fuel_moistures['model']:
+            if model in list(self.fuel_moistures['model']):
                 mask_moisture = self.fuel_moistures['model'] == model
             else:
                 mask_moisture = self.fuel_moistures['model'] == 0 # Default to data for model 0
-            
+
             # Set moistures in given locations to given model data
             moisture_1_hour         [mask_layer] = int(self.fuel_moistures['1_hour'         ].loc[mask_moisture])
             moisture_10_hour        [mask_layer] = int(self.fuel_moistures['10_hour'        ].loc[mask_moisture])
@@ -558,7 +665,7 @@ class Case:
             prefix,
             (self.lcp.num_north, self.lcp.num_east),
             self.getOutputTimes())
-        self.writeMoisture(prefix)
+        self.writeMoistureNPY(prefix)
 
         try:
             np.save(prefix + "_burn.npy", self.burn)

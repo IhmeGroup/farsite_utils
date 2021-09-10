@@ -2,12 +2,11 @@
 import struct
 import array
 import numpy as np
-from osgeo import osr
 
 
 _HEADER_LENGTH = 7316
 _LOHINUMVAL_LENGTH = 412
-_FILE_LENGTH = 256
+_FILE_STRING_LENGTH = 256
 _DESCRIPTION_LENGTH = 512
 _NUM_VALS = 100
 _NUM_EAST_DEFAULT = 100
@@ -15,6 +14,10 @@ _NUM_NORTH_DEFAULT = 100
 _LOHINUMVAL_TYPE = np.int32
 _UNIT_OPTS_TYPE = np.int16
 _DATA_TYPE = np.int16
+_LAYER_NAMES_REQUIRED = ['elevation', 'slope', 'aspect', 'fuel', 'cover']
+_LAYER_NAMES_CROWN = ['height', 'base', 'density']
+_LAYER_NAMES_GROUND = ['duff', 'woody']
+_LAYER_NAMES = _LAYER_NAMES_REQUIRED + _LAYER_NAMES_CROWN + _LAYER_NAMES_GROUND
 
 
 def _parseLoHiNumVal(chunk):
@@ -40,18 +43,32 @@ def _buildEncodedString(s, length):
 
 
 class Layer:
-    def __init__(self):
+    def __init__(self, shape):
         self.lo = _LOHINUMVAL_TYPE(0)
         self.hi = _LOHINUMVAL_TYPE(0)
         self.num = _LOHINUMVAL_TYPE(0)
         self.vals = np.zeros(_NUM_VALS, dtype=_LOHINUMVAL_TYPE)
         self.unit_opts = _UNIT_OPTS_TYPE(0)
         self.file = ""
-        self.data = np.zeros([_NUM_NORTH_DEFAULT, _NUM_EAST_DEFAULT], dtype=_DATA_TYPE)
+        if shape:
+            self.data = np.zeros(shape, dtype=_DATA_TYPE)
+        else:
+            self.data = np.zeros([_NUM_NORTH_DEFAULT, _NUM_EAST_DEFAULT], dtype=_DATA_TYPE)
 
 
     def __str__(self):
         return str(self.__class__) + ": " + str(self.__dict__)
+    
+
+    def __eq__(self, other):
+        if type(other) is type(self):
+            return (
+                self.lo == other.lo and
+                self.hi == other.hi and
+                self.num == other.num and
+                np.array_equal(self.vals, other.vals) and
+                np.array_equal(self.data, other.data))
+        return False
     
 
     @property
@@ -140,7 +157,10 @@ class Layer:
             self.num = _LOHINUMVAL_TYPE(-1)
         else:
             self.num = _LOHINUMVAL_TYPE(len(vals_unique))
-            self.vals[0:self.num] = vals_unique.astype(_LOHINUMVAL_TYPE)
+            if vals_unique[0] == 0:
+                self.vals[0:self.num] = vals_unique.astype(_LOHINUMVAL_TYPE)
+            else:
+                self.vals[1:self.num+1] = vals_unique.astype(_LOHINUMVAL_TYPE)
         self._data = value
 
 
@@ -150,8 +170,8 @@ class Layer:
 
 
 class Landscape:
-    def __init__(self, prefix=None):
-        self.srs = osr.SpatialReference()
+    def __init__(self, prefix=None, shape=None):
+        self.projection = ""
         self.crown_fuels = 20
         self.ground_fuels = 20
         self.latitude = 0
@@ -159,8 +179,12 @@ class Landscape:
         self.hi_east = 0
         self.lo_north = 0
         self.hi_north = 0
-        self.num_east = _NUM_EAST_DEFAULT
-        self.num_north = _NUM_NORTH_DEFAULT
+        if shape:
+            self.num_north = shape[0]
+            self.num_east = shape[1]
+        else:
+            self.num_north = _NUM_NORTH_DEFAULT
+            self.num_east = _NUM_EAST_DEFAULT
         self.utm_east = 0.0
         self.utm_west = 0.0
         self.utm_north = 0.0
@@ -169,16 +193,7 @@ class Landscape:
         self.res_x = 0.0
         self.res_y = 0.0
         self.description = ""
-        self.layers = {'elevation': Layer(),
-                       'slope':     Layer(),
-                       'aspect':    Layer(),
-                       'fuel':      Layer(),
-                       'cover':     Layer(),
-                       'height':    Layer(),
-                       'base':      Layer(),
-                       'density':   Layer(),
-                       'duff':      Layer(),
-                       'woody':     Layer()}
+        self.layers = {name: Layer(shape) for name in _LAYER_NAMES}
 
         if prefix:
             self.read(prefix)
@@ -190,6 +205,12 @@ class Landscape:
 
     def __str__(self):
         return str(self.__class__) + ": " + str(self.__dict__)
+    
+
+    def __eq__(self, other):
+        if type(other) is type(self):
+            return self.__dict__ == other.__dict__
+        return False
 
 
     @property
@@ -202,6 +223,17 @@ class Landscape:
     def size(self):
         return ((self.utm_east -  self.utm_west),
                 (self.utm_north - self.utm_south))
+    
+
+    @property
+    def shape(self):
+        return (self.num_north, self.num_east)
+    
+
+    @shape.setter
+    def shape(self, value):
+        self.num_north = value[0]
+        self.num_east  = value[1]
 
 
     def crownPresent(self):
@@ -233,7 +265,7 @@ class Landscape:
 
         (self.num_east, self.num_north) = struct.unpack('ii', data[4164:4172])
         for layer in self.layers.values():
-            layer.data = np.zeros([self.num_north, self.num_east], dtype=_DATA_TYPE)
+            layer._data = np.zeros([self.num_north, self.num_east], dtype=_DATA_TYPE)
 
         (self.utm_east, self.utm_west, self.utm_north, self.utm_south) = struct.unpack('dddd', data[4172:4204])
         (self.units_grid) = struct.unpack('i', data[4204:4208])[0]
@@ -245,8 +277,8 @@ class Landscape:
 
         data_i = 4244
         for layer in self.layers.values():
-            layer.file = _parseEncodedString(data[data_i:data_i+_FILE_LENGTH])
-            data_i += _FILE_LENGTH
+            layer.file = _parseEncodedString(data[data_i:data_i+_FILE_STRING_LENGTH])
+            data_i += _FILE_STRING_LENGTH
 
         self.description = _parseEncodedString(data[6804:7316])
 
@@ -256,23 +288,19 @@ class Landscape:
         for i in range(self.num_north):
             for j in range(self.num_east):
                 # Read required bands
-                self.layers['elevation'].data[i,j] = struct.unpack('h', data[data_i+0:data_i+ 2])[0]
-                self.layers['slope'    ].data[i,j] = struct.unpack('h', data[data_i+2:data_i+ 4])[0]
-                self.layers['aspect'   ].data[i,j] = struct.unpack('h', data[data_i+4:data_i+ 6])[0]
-                self.layers['fuel'     ].data[i,j] = struct.unpack('h', data[data_i+6:data_i+ 8])[0]
-                self.layers['cover'    ].data[i,j] = struct.unpack('h', data[data_i+8:data_i+10])[0]
-                data_i += 10
+                for name in _LAYER_NAMES_REQUIRED:
+                    self.layers[name].data[i,j] = struct.unpack('h', data[data_i:data_i+2])[0]
+                    data_i += 2
                 # Read crown fuel bands if present
                 if self.crownPresent():
-                    self.layers['height' ].data[i,j] = struct.unpack('h', data[data_i+0:data_i+2])[0]
-                    self.layers['base'   ].data[i,j] = struct.unpack('h', data[data_i+2:data_i+4])[0]
-                    self.layers['density'].data[i,j] = struct.unpack('h', data[data_i+4:data_i+6])[0]
-                    data_i += 6
+                    for name in _LAYER_NAMES_CROWN:
+                        self.layers[name].data[i,j] = struct.unpack('h', data[data_i:data_i+2])[0]
+                        data_i += 2
                 # Read ground fuel bands if present
                 if self.groundPresent():
-                    self.layers['duff' ].data[i,j] = struct.unpack('h', data[data_i+0:data_i+2])[0]
-                    self.layers['woody'].data[i,j] = struct.unpack('h', data[data_i+2:data_i+4])[0]
-                    data_i += 4
+                    for name in _LAYER_NAMES_GROUND:
+                        self.layers[name].data[i,j] = struct.unpack('h', data[data_i:data_i+2])[0]
+                        data_i += 2
 
 
     def readLCP(self, filename):
@@ -288,14 +316,12 @@ class Landscape:
 
     def readProjection(self, filename):
         with open(filename, "r") as file:
-            prj_txt = file.read()
-        self.srs.ImportFromESRI([prj_txt])
-        self.srs.AutoIdentifyEPSG()
+            self.projection = file.read()
     
 
     def writeProjection(self, filename):
         with open(filename, "w") as file:
-            file.write(self.srs.ExportToWkt())
+            file.write(self.projection)
     
 
     def read(self, prefix):
@@ -319,7 +345,7 @@ class Landscape:
         file.write(struct.pack('hhhhhhhhhh', *unit_opts_arr))
 
         for layer in self.layers.values():
-            file.write(_buildEncodedString(layer.file, _FILE_LENGTH))
+            file.write(_buildEncodedString(layer.file, _FILE_STRING_LENGTH))
         
         file.write(_buildEncodedString(self.description, _DESCRIPTION_LENGTH))
 
@@ -331,20 +357,16 @@ class Landscape:
         for i in range(self.num_north):
             for j in range(self.num_east):
                 # Write required bands
-                file.write(struct.pack('i', self.layers['elevation'].data[i,j].astype(_DATA_TYPE)))
-                file.write(struct.pack('i', self.layers['slope'    ].data[i,j].astype(_DATA_TYPE)))
-                file.write(struct.pack('i', self.layers['aspect'   ].data[i,j].astype(_DATA_TYPE)))
-                file.write(struct.pack('i', self.layers['fuel'     ].data[i,j].astype(_DATA_TYPE)))
-                file.write(struct.pack('i', self.layers['cover'    ].data[i,j].astype(_DATA_TYPE)))
+                for name in _LAYER_NAMES_REQUIRED:
+                    file.write(struct.pack('h', self.layers[name].data[i,j].astype(_DATA_TYPE)))
                 # Write crown fuel bands if present
                 if self.crownPresent():
-                    file.write(struct.pack('i', self.layers['height' ].data[i,j].astype(_DATA_TYPE)))
-                    file.write(struct.pack('i', self.layers['base'   ].data[i,j].astype(_DATA_TYPE)))
-                    file.write(struct.pack('i', self.layers['density'].data[i,j].astype(_DATA_TYPE)))
+                    for name in _LAYER_NAMES_CROWN:
+                        file.write(struct.pack('h', self.layers[name].data[i,j].astype(_DATA_TYPE)))
                 # Write ground fuel bands if present
                 if self.groundPresent():
-                    file.write(struct.pack('i', self.layers['duff' ].data[i,j].astype(_DATA_TYPE)))
-                    file.write(struct.pack('i', self.layers['woody'].data[i,j].astype(_DATA_TYPE)))
+                    for name in _LAYER_NAMES_GROUND:
+                        file.write(struct.pack('h', self.layers[name].data[i,j].astype(_DATA_TYPE)))
 
 
     def writeLCP(self, filename):
@@ -356,20 +378,20 @@ class Landscape:
     def write(self, prefix):
         self.writeLCP(prefix+".lcp")
         self.writeProjection(prefix+".prj")
-    
-
-    def projection(self, format):
-        if format == "WKT":
-            return str(self.srs.ExportToWkt())
-        elif format == "PROJ4":
-            return str(self.srs.ExportToProj4())
-        elif format == "EPSG":
-            return str(self.srs.GetAuthorityCode(None))
 
 
     def writeNPY(self, prefix):
-        for name, layer in self.layers.items():
-            np.save(prefix + "_" + name, layer.data)
+        # Write required layers
+        for name in _LAYER_NAMES_REQUIRED:
+            np.save(prefix + "_" + name, self.layers[name].data)
+        # Write crown fuel layers if present
+        if self.crownPresent():
+            for name in _LAYER_NAMES_CROWN:
+                np.save(prefix + "_" + name, self.layers[name].data)
+        # Write ground fuel layers if present
+        if self.groundPresent():
+            for name in _LAYER_NAMES_GROUND:
+                np.save(prefix + "_" + name, self.layers[name].data)
 
 
 def main():

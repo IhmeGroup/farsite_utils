@@ -171,7 +171,7 @@ class RAWS:
         
         # Write
         np.save(prefix + "_wind_east.npy",  wind_east)
-        np.save(prefix + "_wind_north.hpy", wind_north)
+        np.save(prefix + "_wind_north.npy", wind_north)
 
 
 def main():
