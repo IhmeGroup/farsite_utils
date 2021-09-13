@@ -16,6 +16,7 @@ _DATA_COLS = [
     'wind_direction',
     'cloud_cover']
 
+
 class Unit(Enum):
     ENGLISH = 1
     METRIC = 2

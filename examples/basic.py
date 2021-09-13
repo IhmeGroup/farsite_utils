@@ -6,30 +6,17 @@ import numpy as np
 import pandas as pd
 import datetime as dt
 
-import case
-import generate
-from raws import Unit
+from farsite_utils import case
+from farsite_utils import generate
+from farsite_utils import raws
 
 n_cases = 3
+fuels = case.FUELS_40
 prototype = case.Case("./data/cases/ref_128/job.slurm")
 ensemble_name = "basic"
 ensemble_root_dir = "/home/ihme/mbonanni/wildfire_ml/basic/farsite"
 ensemble_out_dir = "/home/ihme/mbonanni/wildfire_ml/basic/export"
 np.random.seed(42)
-
-# LCP 13
-# fuels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 91, 92, 93, 98, 99]
-# fuels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
-
-# LCP 40
-fuels_NB = [91, 92, 93, 98, 99]
-fuels_GR = [i for i in range(101, 109+1)]
-fuels_GS = [i for i in range(121, 124+1)]
-fuels_SH = [i for i in range(141, 149+1)]
-fuels_TU = [i for i in range(161, 165+1)]
-fuels_TL = [i for i in range(181, 189+1)]
-fuels_SB = [i for i in range(201, 204+1)]
-fuels = fuels_NB + fuels_GR + fuels_GS + fuels_SH + fuels_TU + fuels_TL + fuels_SB
 
 shape = (prototype.lcp.num_north, prototype.lcp.num_east)
 
@@ -107,7 +94,7 @@ for i in range(n_cases):
 
     # Weather
     cases[i].weather.elevation = 0
-    cases[i].weather.units = Unit.METRIC
+    cases[i].weather.units = raws.Unit.METRIC
     cases[i].weather.data = cases[i].weather.data[0:0]
     weather_start_time = dt.datetime(
         year   = cases[i].start_time.year,

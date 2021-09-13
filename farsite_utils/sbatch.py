@@ -1,4 +1,4 @@
-"""Class for managing SLURM batch configurations"""
+"""Class for managing SLURM batch configurations."""
 
 import os
 import datetime as dt

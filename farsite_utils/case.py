@@ -1,5 +1,7 @@
-"""Class representing a single Farsite simulation."""
+"""This module contains utilities for managing FARSITE cases."""
+
 import os
+import subprocess
 import warnings
 from enum import Enum
 import datetime as dt
@@ -13,11 +15,10 @@ from collections import Counter
 import matplotlib.pyplot as plt
 import matplotlib.font_manager
 
-import landscape
-import raws
-import sbatch
-import ascii_data
-import generate as gen
+from . import landscape
+from . import raws
+from . import sbatch
+from . import ascii_data
 
 plt.rcParams.update({
     "text.usetex": True,
@@ -42,6 +43,17 @@ _DEFAULT_YEAR = 2000
 _BURN_PERIODS_COLS = ['start', 'end']
 _FUEL_MOISTURES_COLS = ['model', '1_hour', '10_hour', '100_hour', 'live_herbaceous', 'live_woody']
 
+FUELS_NB = [91, 92, 93, 98, 99]
+FUELS_RO = [i for i in range(  1,  13+1)]
+FUELS_GR = [i for i in range(101, 109+1)]
+FUELS_GS = [i for i in range(121, 124+1)]
+FUELS_SH = [i for i in range(141, 149+1)]
+FUELS_TU = [i for i in range(161, 165+1)]
+FUELS_TL = [i for i in range(181, 189+1)]
+FUELS_SB = [i for i in range(201, 204+1)]
+FUELS_13 = FUELS_RO + FUELS_NB
+FUELS_40 = FUELS_NB + FUELS_GR + FUELS_GS + FUELS_SH + FUELS_TU + FUELS_TL + FUELS_SB
+
 
 class CrownFireMethod(Enum):
     FINNEY = 1
@@ -55,6 +67,8 @@ class LineType(Enum):
 
 
 class Case:
+    """This class represents an individual FARSITE case."""
+
     def __init__(self, jobfile_name=None):
         # Inputs
         self.sbatch = sbatch.SBatch()
@@ -87,6 +101,7 @@ class Case:
         self.lcp = landscape.Landscape()
         self.ignition = gpd.GeoDataFrame()
         self.out_type = 0
+        self.job_id = None
 
         # Outputs
         self.arrival_time       = ascii_data.ASCIIData()
@@ -113,11 +128,13 @@ class Case:
 
     @property
     def name(self):
+        """Name for this case."""
         return self._name
     
 
     @name.setter
     def name(self, value):
+        """Set name, adjusting slurm option appropriately."""
         if not isinstance(value, str):
             raise TypeError("Case.name must be a string")
         self._name = value
@@ -126,11 +143,13 @@ class Case:
 
     @property
     def burn_periods(self):
+        """Table of burn periods."""
         return self._burn_periods
     
 
     @burn_periods.setter
     def burn_periods(self, value):
+        """Set table of burn periods, adjusting count appropriately."""
         if not (Counter(value.columns) == Counter(_BURN_PERIODS_COLS)):
             raise ValueError(
                 "Data must have the following columns: " + ", ".join(_BURN_PERIODS_COLS))
@@ -140,11 +159,13 @@ class Case:
 
     @property
     def fuel_moistures(self):
+        """Table of fuel moistures data."""
         return self._fuel_moistures
     
 
     @fuel_moistures.setter
     def fuel_moistures(self, value):
+        """Set table of fuel moistures data, adjusting count appropriately."""
         if not (Counter(value.columns) == Counter(_FUEL_MOISTURES_COLS)):
             raise ValueError(
                 "Data must have the following columns: " + ", ".join(_FUEL_MOISTURES_COLS))
@@ -153,6 +174,7 @@ class Case:
     
 
     def read(self, jobfile_name):
+        """Read full case by following paths from slurm script."""
         [self.root_dir, self.jobfile_name_local] = os.path.split(jobfile_name)
         self.sbatch.read(jobfile_name)
         runfile_name = os.path.join(self.root_dir, self.sbatch.runfile_name_local)
@@ -169,6 +191,7 @@ class Case:
     
 
     def __writeInputHeader(self, file):
+        """Write the header of the input file."""
         file.write("FARSITE INPUTS FILE VERSION 1.0\n")
         file.write("FARSITE_START_TIME: {0:02d} {1:02d} {2:02d}{3:02d}\n".format(
             self.start_time.month,
@@ -188,6 +211,7 @@ class Case:
 
 
     def __writeInputBurnPeriods(self, file):
+        """Write the table of burn periods to the input file."""
         file.write("FARSITE_BURN_PERIODS: {0:d}\n".format(self.burn_periods_count))
         for i in range(self.burn_periods_count):
             file.write("{0:02d} {1:02d} {2:02d}{3:02d} {4:02d}{5:02d}\n".format(
@@ -200,6 +224,7 @@ class Case:
 
 
     def __writeInputFuelMoistures(self, file):
+        """Write the table of fuel moistures data to the input file."""
         file.write("FUEL_MOISTURES_DATA: {0:d}\n".format(self.fuel_moistures_count))
         for i in range(self.fuel_moistures_count):
             file.write("{0} {1} {2} {3} {4} {5}\n".format(
@@ -212,6 +237,7 @@ class Case:
 
 
     def __writeInputSpotting(self, file):
+        """Write spotting parameters to the input file."""
         file.write("FARSITE_SPOT_GRID_RESOLUTION: {0:.1f}\n".format(self.spot_grid_resolution))
         file.write("FARSITE_SPOT_PROBABILITY: {0:0.2f}\n".format(self.spot_probability))
         file.write("FARSITE_SPOT_IGNITION_DELAY: {0}\n".format(self.spot_ignition_delay))
@@ -221,16 +247,18 @@ class Case:
     
 
     def __writeInputWeather(self, file):
+        """Write weather parameters to the input file."""
         file.write("RAWS_FILE: {0}\n".format(self.name+".raws"))
     
 
     def __writeInputCrown(self, file):
+        """Write crown fire parameters to the input file."""
         file.write("FOLIAR_MOISTURE_CONTENT: {0}\n".format(self.foliar_moisture_content))
         file.write("CROWN_FIRE_METHOD: " + self.crown_fire_method.name.title() + "\n")
     
 
     def writeInput(self, filename):
-        """Write Farsite input file"""
+        """Write the FARSITE input file"""
         with open(filename, "w") as file:
             self.__writeInputHeader(file)
             file.write("\n\n")
@@ -247,10 +275,12 @@ class Case:
     
 
     def __stripComment(self, line):
+        """Remove comment from input file line."""
         return line.split("#")[0]
     
 
     def __detectLineType(self, line):
+        """Detect the type of the given input file line."""
         line_nocomment = self.__stripComment(line)
         if line_nocomment in ("", "\n"):
             return LineType.EMPTY
@@ -265,6 +295,7 @@ class Case:
     
 
     def __parseNameValLine(self, line):
+        """Parse input file line containing name-value pair."""
         line_nocomment = self.__stripComment(line)
         data = line_nocomment.strip().split(": ")
         if len(data) == 1:
@@ -276,11 +307,13 @@ class Case:
     
 
     def __parseListLine(self, line):
+        """Parse input file line containing list."""
         line_nocomment = self.__stripComment(line)
         return line_nocomment.strip().split(" ")
     
 
     def __parseTime(self, timestr):
+        """Parse datetime from string."""
         vals = timestr.split(" ")
         return dt.datetime(
             _DEFAULT_YEAR,
@@ -291,6 +324,7 @@ class Case:
     
 
     def __readNameValLine(self, line):
+        """Read the name-value pair line from the input file and set the appropriate attribute."""
         [name, val] = self.__parseNameValLine(line)
         if name == "FARSITE_START_TIME":
             self.start_time = self.__parseTime(val)
@@ -329,6 +363,7 @@ class Case:
     
 
     def __readBurnPeriodsLines(self, lines):
+        """Read the table of burn periods from the input file."""
         for line in lines:
             vals = self.__parseListLine(line)
             entry = {}
@@ -348,6 +383,7 @@ class Case:
     
 
     def __readMoistureLines(self, lines):
+        """Read the table of fuel moistures data from the input file."""
         for line in lines:
             vals = self.__parseListLine(line)
             entry = {}
@@ -361,7 +397,7 @@ class Case:
     
 
     def readInput(self, filename):
-        """Read Farsite input file"""
+        """Read the FARSITE input file"""
         self.fuel_moistures = self.fuel_moistures[0:0]
         with open(filename, "r") as file:
             for line in file:
@@ -387,8 +423,7 @@ class Case:
     
 
     def write(self):
-        """Write all files to directory with proper structure"""
-
+        """Write all files to the root directory with proper structure"""
         landscape_dir = os.path.join(self.root_dir, self.landscape_dir_local)
         ignition_dir = os.path.join(self.root_dir, self.ignition_dir_local)
         out_dir = os.path.join(self.root_dir, self.out_dir_local)
@@ -435,19 +470,26 @@ class Case:
     
 
     def run(self):
+        """Submit the slurm job to run the case."""
         current_dir = os.getcwd()
         os.chdir(self.root_dir)
-        os.system("sbatch " + self.jobfile_name_local)
+        result = subprocess.run(["sbatch", self.jobfile_name_local], stdout=subprocess.PIPE)
+        self.job_id = int(result.stdout.decode('utf-8').strip().split(" ")[-1])
+        import code; code.interact(local=locals())
         os.chdir(current_dir)
     
 
     def isDone(self):
-        files = os.listdir(self.root_dir)
+        """Determine whether the slurm job has completed."""
+        # If job ID has not been set, run was never started
+        if not self.job_id:
+            return False
 
         # Find log file, if it exists
+        files = os.listdir(self.root_dir)
         log_file = None
         for file in files:
-            if ".out" in file:
+            if "{0:d}.out".format(self.job_id) in file:
                 log_file = file
         
         # If log file does not exist, run is not done
@@ -465,6 +507,7 @@ class Case:
     
 
     def __outputFile(self, name):
+        """Build output file path string."""
         return os.path.join(
             self.root_dir,
             self.out_dir_local,
@@ -472,6 +515,7 @@ class Case:
     
 
     def __convertAndMergePerimeters(self):
+        """Convert LineString perimeters to Polygon and MultiPolygon objects."""
         self.perimeters_merged = self.perimeters.copy()
         self.perimeters_merged = self.perimeters_merged[0:0]
 
@@ -502,6 +546,7 @@ class Case:
 
 
     def readOutput(self):
+        """Read FARSITE output data."""
         self.arrival_time       = ascii_data.ASCIIData(self.__outputFile("ArrivalTime.asc"))
         self.crown_fire         = ascii_data.ASCIIData(self.__outputFile("CrownFire.asc"))
         self.flame_length       = ascii_data.ASCIIData(self.__outputFile("FlameLength.asc"))
@@ -518,6 +563,7 @@ class Case:
     
 
     def __plotPerimeters(self, ax, n_perimeters):
+        """Add perimeters to plot."""
         plot_interval = int(np.round(len(self.perimeters_merged.geometry) / n_perimeters))
         for i, per in enumerate(self.perimeters_merged.geometry):
             if i % plot_interval:
@@ -538,6 +584,7 @@ class Case:
     
 
     def renderOutput(self, filename):
+        """Plot fire and save figure to file."""
         fig, axs = plt.subplots(2, 2)
         extent = (
             self.lcp.utm_west  / 1000.0,
@@ -571,6 +618,7 @@ class Case:
     
 
     def __burnMap(self, perimeter_poly):
+        """Compute the fractional burn map for a given perimeter."""
         burn = np.zeros([self.lcp.num_north, self.lcp.num_east])
         prepared_perimeter = prep(perimeter_poly)
 
@@ -591,6 +639,7 @@ class Case:
     
 
     def computeBurnMaps(self):
+        """Compute the fractional burn maps for all output perimeters."""
         n_steps = len(self.perimeters_merged)
         self.burn = np.zeros([
             n_steps,
@@ -602,6 +651,7 @@ class Case:
 
 
     def getOutputTimes(self):
+        """Get output times from perimeters table."""
         times = []
         for i, entry in self.perimeters_merged.iterrows():
             times.append(dt.datetime(
@@ -614,6 +664,7 @@ class Case:
     
 
     def writeMoistureNPY(self, prefix):
+        """Write moisture data in Numpy format."""
         nonzero = np.where(self.lcp.layers['fuel'].vals)[0]
         if nonzero.size == 0:
             models = [0]
@@ -656,6 +707,7 @@ class Case:
 
 
     def exportData(self, prefix):
+        """Export data in Numpy format."""
         [out_dir, out_name] = os.path.split(prefix)
         if not os.path.isdir(out_dir):
             os.makedirs(out_dir, exist_ok=True)

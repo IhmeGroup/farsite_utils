@@ -20,6 +20,11 @@ class ASCIIData:
         return str(self.__class__) + ": " + str(self.__dict__)
     
 
+    @property
+    def shape(self):
+        return (self.nrows, self.ncols)
+    
+
     def __parseHeaderLine(self, line):
         return line.strip().split(" ")
     
