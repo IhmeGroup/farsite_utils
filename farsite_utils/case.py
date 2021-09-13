@@ -475,7 +475,6 @@ class Case:
         os.chdir(self.root_dir)
         result = subprocess.run(["sbatch", self.jobfile_name_local], stdout=subprocess.PIPE)
         self.job_id = int(result.stdout.decode('utf-8').strip().split(" ")[-1])
-        import code; code.interact(local=locals())
         os.chdir(current_dir)
     
 
@@ -646,7 +645,7 @@ class Case:
             self.lcp.num_north,
             self.lcp.num_east])
         for i in range(n_steps):
-            print("Computing burn map {0}/{1}".format(i+1, n_steps))
+            # print("Computing burn map {0}/{1}".format(i+1, n_steps))
             self.burn[i] = self.__burnMap(self.perimeters_merged.loc[i].geometry)
 
 
