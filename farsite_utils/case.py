@@ -117,6 +117,7 @@ class Case:
         self.spots = gpd.GeoDataFrame()
         self.perimeters = gpd.GeoDataFrame()
         self.perimeters_merged = gpd.GeoDataFrame()
+        self.verbose = False
 
         if jobfile_name:
             self.read(jobfile_name)
@@ -609,10 +610,7 @@ class Case:
             ax.set_ylabel("x (km)")
         
         fig.tight_layout()
-        fig.savefig(
-            filename,
-            bbox_inches='tight',
-            dpi=300)
+        fig.savefig(filename, bbox_inches='tight', dpi=300)
         plt.show()
     
 
@@ -645,7 +643,8 @@ class Case:
             self.lcp.num_north,
             self.lcp.num_east])
         for i in range(n_steps):
-            # print("Computing burn map {0}/{1}".format(i+1, n_steps))
+            if self.verbose:
+                print("Computing case " + self.name + " burn map {0}/{1}".format(i+1, n_steps))
             self.burn[i] = self.__burnMap(self.perimeters_merged.loc[i].geometry)
 
 

@@ -1,6 +1,7 @@
 """Script for generating basic dataset."""
 
 import os
+import time
 import numpy as np
 import pandas as pd
 import datetime as dt
@@ -22,12 +23,13 @@ batch = ensemble.Ensemble(
     prototype = case.Case("../prototype/job.slurm"))
 batch.cases_dir_local = "./cases"
 batch.out_dir_local = "./export"
+verbose = True
 
 shape = (prototype.lcp.num_north, prototype.lcp.num_east)
 
 for i in range(batch.size):
 
-    print("Generating case {0}".format(i))
+    print("Generating case " + batch.caseID(i))
 
     # Time parameters
     batch.cases[i].start_time = dt.datetime(2000, 1, 1, 8, 0)
@@ -138,8 +140,6 @@ print("Writing cases...")
 batch.write()
 print("Running cases...")
 batch.run()
-
-import time; time.sleep(5)
-
+time.sleep(5)
 print("Post processing cases...")
-batch.postProcess()
+batch.postProcess(attempts=3)

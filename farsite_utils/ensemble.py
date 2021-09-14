@@ -18,12 +18,19 @@ class Ensemble:
             self.name = name
         if root_dir:
             self.root_dir = root_dir
+        self.exported = [False] * self.size
+        self.verbose = False
     
 
     @property
     def size(self):
         """The number of cases in the ensemble."""
         return len(self.cases)
+    
+
+    def caseID(self, i):
+        """Return formatted case ID string"""
+        return "{0:0{1}d}".format(i, int(np.ceil(np.log10(self.size-1))))
     
 
     @property
@@ -37,7 +44,7 @@ class Ensemble:
         """Set the name for this ensemble and all of its cases."""
         self._name = value
         for i, case in enumerate(self.cases):
-            case.name = value + "_{0:0{1}d}".format(i, int(np.ceil(np.log10(self.size-1))))
+            case.name = value + "_" + self.caseID(i)
 
 
     @property
@@ -54,7 +61,7 @@ class Ensemble:
             case.root_dir = os.path.join(
                 value,
                 self.cases_dir_local,
-                "{0:0{1}d}".format(i, int(np.ceil(np.log10(self.size-1)))))
+                self.caseID(i))
     
 
     @property
@@ -72,6 +79,20 @@ class Ensemble:
             if not isinstance(item, case.Case):
                 raise TypeError("Ensemble.cases must be a list of Cases.")
         self._cases = value
+    
+
+    @property
+    def verbose(self):
+        return self._verbose
+    
+
+    @verbose.setter
+    def verbose(self, value):
+        if not isinstance(value, bool):
+            raise TypeError("Ensemble.verbose must be a bool.")
+        self._verbose = value
+        for case in self.cases:
+            case.verbose = True
     
 
     def write(self):
@@ -99,15 +120,31 @@ class Ensemble:
         return True
     
 
-    def postProcess(self, n_processes=multiprocessing.cpu_count()):
+    def postProcess(self, n_processes=multiprocessing.cpu_count(), attempts=1):
         """Postprocess all cases in ensemble."""
-        pool = multiprocessing.Pool(n_processes)
-        self.exported = pool.map(self.postProcessCase, self.cases)
+        for i in range(attempts):
+            # Collect cases which have not yet been exported
+            indices_to_export = []
+            cases_to_export = []
+            for j, case in enumerate(self.cases):
+                if not self.exported[j]:
+                    indices_to_export.append(j)
+                    cases_to_export.append(case)
+            
+            # Postprocess remaining cases in parallel
+            pool = multiprocessing.Pool(n_processes)
+            results = pool.map(self.postProcessCase, cases_to_export)
 
-        print("Failed to postprocess cases:")
-        for i in range(self.size):
-            if not self.exported[i]:
-                print(i, end=" ")
+            # If all exported, break. Otherwise report failure and try again
+            if all(results):
+                break
+            else:
+                print("Failed to postprocess cases:", end=" ")
+                for j, case_successful in enumerate(results):
+                    self.exported[indices_to_export[j]] = case_successful
+                    if not case_successful:
+                        print(self.caseID(indices_to_export[j]), end=" ")
+                print("")
 
 
 def main():
