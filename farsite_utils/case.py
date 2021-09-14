@@ -51,8 +51,10 @@ FUELS_SH = [i for i in range(141, 149+1)]
 FUELS_TU = [i for i in range(161, 165+1)]
 FUELS_TL = [i for i in range(181, 189+1)]
 FUELS_SB = [i for i in range(201, 204+1)]
-FUELS_13 = FUELS_RO + FUELS_NB
-FUELS_40 = FUELS_NB + FUELS_GR + FUELS_GS + FUELS_SH + FUELS_TU + FUELS_TL + FUELS_SB
+FUELS_13_BURNABLE = FUELS_RO
+FUELS_40_BURNABLE = FUELS_GR + FUELS_GS + FUELS_SH + FUELS_TU + FUELS_TL + FUELS_SB
+FUELS_13 = FUELS_NB + FUELS_13_BURNABLE
+FUELS_40 = FUELS_NB + FUELS_40_BURNABLE
 
 
 class CrownFireMethod(Enum):
@@ -602,7 +604,7 @@ class Case:
         plt.colorbar(im3, ax=axs[1,0], label="Fuel Model")
 
         im4 = axs[1,1].imshow(self.spread_rate.data, extent=extent)
-        plt.colorbar(im4, ax=axs[1,1], label="Spread Rate (m/s)")
+        plt.colorbar(im4, ax=axs[1,1], label="Spread Rate (km/h)")
 
         for ax in axs.reshape(-1):
             self.__plotPerimeters(ax, 5)

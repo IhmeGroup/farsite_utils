@@ -4,6 +4,7 @@ import os
 import copy
 import multiprocessing
 import numpy as np
+import time
 
 from . import case
 
@@ -120,7 +121,7 @@ class Ensemble:
         return True
     
 
-    def postProcess(self, n_processes=multiprocessing.cpu_count(), attempts=1):
+    def postProcess(self, n_processes=multiprocessing.cpu_count(), attempts=1, pause_time=5):
         """Postprocess all cases in ensemble."""
         for i in range(attempts):
             # Collect cases which have not yet been exported
@@ -145,6 +146,7 @@ class Ensemble:
                     if not case_successful:
                         print(self.caseID(indices_to_export[j]), end=" ")
                 print("")
+                time.sleep(pause_time)
 
 
 def main():

@@ -13,7 +13,8 @@ from farsite_utils import raws
 
 np.random.seed(42)
 
-fuels = case.FUELS_40
+# fuels = case.FUELS_40
+fuels = case.FUELS_40_BURNABLE
 print("Loading prototype...")
 prototype = case.Case("../prototype/job.slurm")
 batch = ensemble.Ensemble(
@@ -42,7 +43,7 @@ for i in range(batch.size):
     accessible_fraction = 0.5
     batch.cases[i].ignition.geometry[0] = generate.regularPolygon(
         sides       = 8,
-        radius      = 0.05 * (batch.cases[i].lcp.utm_east - batch.cases[i].lcp.utm_west),
+        radius      = 0.01 * (batch.cases[i].lcp.utm_east - batch.cases[i].lcp.utm_west),
         rotation    = 0,
         translation = (
             np.random.uniform(
@@ -67,8 +68,9 @@ for i in range(batch.size):
     batch.cases[i].lcp.layers['elevation'].data = np.round(generate.gradient(shape, aspect, slope)).astype(np.int16)
     batch.cases[i].lcp.layers['fuel'].file = ""
     batch.cases[i].lcp.layers['fuel'].unit_opts = np.int16(0) # No custom and no file
-    fuel_raw = generate.randomPatchy(shape, fuels, 99, 0.9, 4, 10, 3, dtype=np.int16)
-    batch.cases[i].lcp.layers['fuel'].data = generate.setBorder(fuel_raw, 5, 99)
+    batch.cases[i].lcp.layers['fuel'].data = np.ones(shape, dtype=np.int16) * np.random.choice(fuels)
+    # fuel_raw = generate.randomPatchy(shape, fuels, 99, 0.9, 4, 10, 3, dtype=np.int16)
+    # batch.cases[i].lcp.layers['fuel'].data = generate.setBorder(fuel_raw, 5, 99)
     batch.cases[i].lcp.layers['cover'].file = ""
     batch.cases[i].lcp.layers['cover'].unit_opts = np.int16(0) # Percent
     batch.cases[i].lcp.layers['cover'].data = generate.randomInteger(shape, 0, 100, dtype=np.int16)
@@ -140,6 +142,5 @@ print("Writing cases...")
 batch.write()
 print("Running cases...")
 batch.run()
-time.sleep(5)
 print("Post processing cases...")
-batch.postProcess(attempts=3)
+batch.postProcess(attempts=3, pause_time=5)
