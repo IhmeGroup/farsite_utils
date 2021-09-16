@@ -86,7 +86,7 @@ def randomPatchy(field_shape, vals, base, p_filled, patch_sides, patch_radius_me
     return field
 
 
-def gradient(field_shape, aspect, slope, dtype=None):
+def gradient(field_shape, aspect, slope, length_scale=1.0, dtype=None):
     """Generate field with constant given slope in given direction.
     All angles in radians."""
 
@@ -98,7 +98,7 @@ def gradient(field_shape, aspect, slope, dtype=None):
     y = np.arange(field_shape[1])
     [X, Y] = np.meshgrid(x, y)
 
-    field = (plane_norm[0]*X + plane_norm[1]*Y) / plane_norm[2]
+    field = length_scale * (plane_norm[0]*X + plane_norm[1]*Y) / plane_norm[2]
     field -= np.amin(field)
     return field.astype(dtype)
 

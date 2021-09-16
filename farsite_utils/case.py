@@ -119,6 +119,7 @@ class Case:
         self.spots = gpd.GeoDataFrame()
         self.perimeters = gpd.GeoDataFrame()
         self.perimeters_merged = gpd.GeoDataFrame()
+        self.burn = None
         self.verbose = False
 
         if jobfile_name:
@@ -613,7 +614,7 @@ class Case:
         
         fig.tight_layout()
         fig.savefig(filename, bbox_inches='tight', dpi=300)
-        plt.show()
+        plt.close()
     
 
     def __burnMap(self, perimeter_poly):
@@ -719,9 +720,9 @@ class Case:
             self.getOutputTimes())
         self.writeMoistureNPY(prefix)
 
-        try:
+        if self.burn is not None:
             np.save(prefix + "_burn.npy", self.burn)
-        except AttributeError:
+        else:
             raise RuntimeError("Burn maps have not yet been computed -- run Case.computeBurnMaps()")
 
 

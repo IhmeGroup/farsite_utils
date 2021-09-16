@@ -96,12 +96,17 @@ class Ensemble:
             case.verbose = True
     
 
-    def write(self):
+    def writeCase(self, case):
+        """Write a single case."""
+        if not os.path.isdir(case.root_dir):
+            os.makedirs(case.root_dir, exist_ok=True)
+        case.write()
+    
+
+    def write(self, n_processes=multiprocessing.cpu_count()):
         """Write all cases in ensemble."""
-        for case in self.cases:
-            if not os.path.isdir(case.root_dir):
-                os.makedirs(case.root_dir, exist_ok=True)
-            case.write()
+        pool = multiprocessing.Pool(n_processes)
+        pool.map(self.writeCase, self.cases)
     
 
     def run(self):

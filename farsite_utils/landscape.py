@@ -382,8 +382,13 @@ class Landscape:
 
     def writeNPY(self, prefix):
         # Write required layers
-        for name in _LAYER_NAMES_REQUIRED:
-            np.save(prefix + "_" + name, self.layers[name].data)
+        slope_east  = self.layers['slope'].data * np.cos(self.layers['aspect'].data + np.pi/2)
+        slope_north = self.layers['slope'].data * np.sin(-self.layers['aspect'].data + np.pi/2)
+        np.save(prefix + "_slope_east", slope_east)
+        np.save(prefix + "_slope_north", slope_north)
+        np.save(prefix + "_elevation", self.layers['elevation'].data)
+        np.save(prefix + "_fuel", self.layers['fuel'].data)
+        np.save(prefix + "_cover", self.layers['cover'].data)
         # Write crown fuel layers if present
         if self.crownPresent():
             for name in _LAYER_NAMES_CROWN:

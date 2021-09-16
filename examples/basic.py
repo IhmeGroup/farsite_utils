@@ -20,7 +20,7 @@ prototype = case.Case("../prototype/job.slurm")
 batch = ensemble.Ensemble(
     name      = "basic",
     root_dir  = "./",
-    n_cases   = 3,
+    n_cases   = 1000,
     prototype = case.Case("../prototype/job.slurm"))
 batch.cases_dir_local = "./cases"
 batch.out_dir_local = "./export"
@@ -65,7 +65,11 @@ for i in range(batch.size):
     batch.cases[i].lcp.layers['slope'].data = np.round(np.zeros(shape) + np.degrees(slope)).astype(np.int16)
     batch.cases[i].lcp.layers['elevation'].file = ""
     batch.cases[i].lcp.layers['elevation'].unit_opts = np.int16(0) # Meters
-    batch.cases[i].lcp.layers['elevation'].data = np.round(generate.gradient(shape, aspect, slope)).astype(np.int16)
+    batch.cases[i].lcp.layers['elevation'].data = np.round(generate.gradient(
+        shape,
+        aspect,
+        slope,
+        length_scale=batch.cases[i].lcp.res_x)).astype(np.int16)
     batch.cases[i].lcp.layers['fuel'].file = ""
     batch.cases[i].lcp.layers['fuel'].unit_opts = np.int16(0) # No custom and no file
     batch.cases[i].lcp.layers['fuel'].data = np.ones(shape, dtype=np.int16) * np.random.choice(fuels)
