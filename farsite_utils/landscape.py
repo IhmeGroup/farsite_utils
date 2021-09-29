@@ -382,8 +382,8 @@ class Landscape:
 
     def writeNPY(self, prefix):
         # Write required layers
-        slope_east  = self.layers['slope'].data * np.cos(self.layers['aspect'].data + np.pi/2)
-        slope_north = self.layers['slope'].data * np.sin(-self.layers['aspect'].data + np.pi/2)
+        slope_east  = self.layers['slope'].data * np.cos( self.layers['aspect'].data + np.pi/2)
+        slope_north = self.layers['slope'].data * np.sin(-self.layers['aspect'].data - np.pi/2)
         np.save(prefix + "_slope_east", slope_east)
         np.save(prefix + "_slope_north", slope_north)
         np.save(prefix + "_elevation", self.layers['elevation'].data)

@@ -90,8 +90,8 @@ def gradient(field_shape, aspect, slope, length_scale=1.0, dtype=None):
     """Generate field with constant given slope in given direction.
     All angles in radians."""
 
-    plane_norm = np.array([-np.sin(slope) * np.cos(-aspect + np.pi/2),
-                           -np.sin(slope) * np.sin(-aspect + np.pi/2),
+    plane_norm = np.array([np.sin(slope) * np.cos( aspect + np.pi/2),
+                           np.sin(slope) * np.sin(-aspect - np.pi/2),
                            np.cos(slope)])
     
     x = np.arange(field_shape[0])

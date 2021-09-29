@@ -2,19 +2,13 @@
 
 import os
 import datetime as dt
-from string import Template
 
 
-class _DeltaTemplate(Template):
-    delimiter = "%"
-
-
-def strfdelta(tdelta, fmt):
-    d = {"D": tdelta.days}
-    d["H"], rem = divmod(tdelta.seconds, 3600)
-    d["M"], d["S"] = divmod(rem, 60)
-    t = _DeltaTemplate(fmt)
-    return t.substitute(**d)
+def strdelta(tdelta):
+    days = tdelta.days
+    hours, rem = divmod(tdelta.seconds, 3600)
+    minutes, seconds = divmod(rem, 60)
+    return "{0:d}-{1:02d}:{2:02d}:{3:02d}".format(days, hours, minutes, seconds)
 
 
 class _Option:
@@ -29,7 +23,7 @@ class _Option:
 
     def __formatted_value(self):
         if isinstance(self.value, dt.timedelta):
-            return strfdelta(self.value, "%D-%H:%M:%S")
+            return strdelta(self.value)
         else:
             return str(self.value)
     
