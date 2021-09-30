@@ -17,8 +17,13 @@ from farsite_utils import generate
 from farsite_utils import raws
 
 np.random.seed(42)
+cases_to_fix = [95, 124, 250, 256, 391, 583, 710, 790, 858, 861, 892, 914, 924, 962]
+
+if cases_to_fix:
+    np.random.seed(43)
 
 n_fuels = 13
+fuels = case.FUELS_13
 not_burnable_max = 0.3
 expected_res = 30.0
 
@@ -60,12 +65,6 @@ CA_window = rasterio.windows.from_bounds(
 print("Reading data...")
 data_CA = {}
 for key in data_raw:
-
-    # DEBUG
-    # if key in ['slope']:
-    #     continue
-    # DEBUG
-
     data_CA[key] = data_raw[key].read(1, window=CA_window)
     print("Successfully read " + key)
 
@@ -84,6 +83,9 @@ shape = (prototype.lcp.num_north, prototype.lcp.num_east)
 
 for i in range(batch.size):
 
+    if cases_to_fix and not i in cases_to_fix:
+        continue
+
     print("Generating case " + batch.caseID(i))
 
     # Time parameters
@@ -99,8 +101,6 @@ for i in range(batch.size):
         sample = data_CA['fuel'][rand_x:rand_x + shape[0], rand_y:rand_y + shape[1]]
         not_burnable = np.isin(sample, [-9999] + case.FUELS_NB)
         valid = (np.sum(not_burnable) / not_burnable.size) < not_burnable_max
-    
-    import code; code.interact(local=locals())
 
     # Landscape
     batch.cases[i].lcp.description = "Randomly-generated planar terrain"
@@ -205,9 +205,21 @@ for i in range(batch.size):
     batch.cases[i].number_processors = 1
     batch.cases[i].out_type = 0
 
-print("Writing cases...")
-batch.write()
-print("Running cases...")
-batch.run()
-print("Post processing cases...")
-batch.postProcess(attempts=10, pause_time=5)
+    # Write and run fix cases
+    if cases_to_fix:
+        batch.cases[i].write()
+        batch.cases[i].run()
+        while not batch.cases[i].isDone():
+            time.sleep(5)
+        batch.cases[i].readOutput()
+        batch.cases[i].renderOutput(os.path.join(batch.cases[i].root_dir, batch.cases[i].name))
+        batch.cases[i].computeBurnMaps()
+        batch.cases[i].exportData(os.path.join(batch.root_dir, batch.out_dir_local, batch.cases[i].name))
+
+if not cases_to_fix:
+    print("Writing cases...")
+    batch.write()
+    print("Running cases...")
+    batch.run()
+    print("Post processing cases...")
+    batch.postProcess(attempts=10, pause_time=5)
