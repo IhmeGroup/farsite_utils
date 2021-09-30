@@ -18,6 +18,7 @@ _LAYER_NAMES_REQUIRED = ['elevation', 'slope', 'aspect', 'fuel', 'cover']
 _LAYER_NAMES_CROWN = ['height', 'base', 'density']
 _LAYER_NAMES_GROUND = ['duff', 'woody']
 _LAYER_NAMES = _LAYER_NAMES_REQUIRED + _LAYER_NAMES_CROWN + _LAYER_NAMES_GROUND
+_NODATA_VALUE = -9999
 
 
 def _parseLoHiNumVal(chunk):
@@ -155,12 +156,15 @@ class Layer:
         vals_unique = np.unique(value)
         if len(vals_unique) > _NUM_VALS:
             self.num = _LOHINUMVAL_TYPE(-1)
+        elif len(vals_unique) == _NUM_VALS and np.any(vals_unique == _NODATA_VALUE):
+            self.num = _LOHINUMVAL_TYPE(-1)
+        elif len(vals_unique) == _NUM_VALS and not np.any(vals_unique == 0):
+            self.num = _LOHINUMVAL_TYPE(-1)
         else:
+            if vals_unique[0] != 0:
+                vals_unique = np.append(0, vals_unique)
             self.num = _LOHINUMVAL_TYPE(len(vals_unique))
-            if vals_unique[0] == 0:
-                self.vals[0:self.num] = vals_unique.astype(_LOHINUMVAL_TYPE)
-            else:
-                self.vals[1:self.num+1] = vals_unique.astype(_LOHINUMVAL_TYPE)
+            self.vals[0:self.num] = vals_unique.astype(_LOHINUMVAL_TYPE)
         self._data = value
 
 
