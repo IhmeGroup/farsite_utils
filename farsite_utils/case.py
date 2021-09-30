@@ -482,30 +482,65 @@ class Case:
         os.chdir(current_dir)
     
 
-    def isDone(self):
-        """Determine whether the slurm job has completed."""
-        # If job ID has not been set, run was never started
-        if not self.job_id:
-            return False
-
-        # Find log file, if it exists
+    def logFile(self):
+        """Find log file, if it exists."""
         files = os.listdir(self.root_dir)
         log_file = None
         for file in files:
             if "{0:d}.out".format(self.job_id) in file:
-                log_file = file
-        
-        # If log file does not exist, run is not done
+                return file
+    
+
+    def isStarted(self):
+        """Determine whether the FARSITE simulation has started."""
+        # If job ID has not been set, run has not started
+        if not self.job_id:
+            return False
+
+        # If log file does not exist, run has not started
+        log_file = self.logFile()
         if not log_file:
             return False
         
-        # Read log file for output line, done if found
+        # Read log file for launch line, started if found
         with open(os.path.join(self.root_dir, log_file), "r") as file:
+            for line in file:
+                if "Launching Farsite" in line:
+                    return True
+        
+        # Not started if line not found
+        return False
+    
+
+    def isDone(self):
+        """Determine whether the slurm job has completed."""
+        # FARSITE cannot be done if it has not started
+        if not self.isStarted():
+            return False
+        
+        # Read log file for output line, done if found
+        with open(os.path.join(self.root_dir, self.logFile()), "r") as file:
             for line in file:
                 if "Writing outputs" in line:
                     return True
         
         # Not done if output line not found
+        return False
+    
+
+    def ignitionFailed(self):
+        """Determine whether the case has failed to ignite."""
+        # Ignition cannot have failed yet if FARSITE has not started
+        if not self.isStarted():
+            return False
+        
+        # Read log file for ignition failure line, failed if found
+        with open(os.path.join(self.root_dir, self.logFile()), "r") as file:
+            for line in file:
+                if "No ignition" in line:
+                    return True
+        
+        # Not failed if failure line not found
         return False
     
 

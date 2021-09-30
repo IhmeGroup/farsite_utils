@@ -1,5 +1,6 @@
 """This module contains utilities for managing ensembles of FARSITE cases."""
 
+from enum import Enum
 import os
 import copy
 import multiprocessing
@@ -7,6 +8,13 @@ import numpy as np
 import time
 
 from . import case
+
+
+class CaseStatus(Enum):
+    IGNITION_FAILED = 1
+    NOT_DONE_YET = 2
+    DONE = 3
+
 
 class Ensemble:
     """This class represents an ensemble of FARSITE cases."""
@@ -117,13 +125,15 @@ class Ensemble:
 
     def postProcessCase(self, case):
         """Postprocess a single case and return success status."""
+        if case.ignitionFailed():
+            return CaseStatus.IGNITION_FAILED
         if not case.isDone():
-            return False
+            return CaseStatus.NOT_DONE_YET
         case.readOutput()
         case.renderOutput(os.path.join(case.root_dir, case.name))
         case.computeBurnMaps()
         case.exportData(os.path.join(self.root_dir, self.out_dir_local, case.name))
-        return True
+        return CaseStatus.DONE
     
 
     def postProcess(self, n_processes=multiprocessing.cpu_count(), attempts=1, pause_time=5):
@@ -145,12 +155,14 @@ class Ensemble:
             if all(results):
                 break
             else:
-                print("Failed to postprocess cases:", end=" ")
-                for j, case_successful in enumerate(results):
-                    self.exported[indices_to_export[j]] = case_successful
-                    if not case_successful:
-                        print(self.caseID(indices_to_export[j]), end=" ")
-                print("")
+                for j, case_result in enumerate(results):
+                    self.exported[indices_to_export[j]] = (case_result == CaseStatus.DONE)
+                    if case_result == CaseStatus.IGNITION_FAILED:
+                        cases_ignition_failed.append(self.caseID(indices_to_export[j]))
+                    elif case_result == CaseStatus.NOT_YET_DONE:
+                        cases_not_yet_done.append(self.caseID(indices_to_export[j]))
+                print("Failed to ignite:", *cases_ignition_failed)
+                print("Failed to postprocess:", *cases_not_yet_done)
                 time.sleep(pause_time)
 
 

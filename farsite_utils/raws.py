@@ -1,4 +1,5 @@
 """Utilities for reading and writing RAWS files."""
+
 from enum import Enum
 import datetime as dt
 import numpy as np
