@@ -18,6 +18,7 @@ from farsite_utils import raws
 
 np.random.seed(42)
 cases_to_fix = [95, 124, 250, 256, 391, 583, 710, 790, 858, 861, 892, 914, 924, 962]
+# cases_to_fix = []
 
 if cases_to_fix:
     np.random.seed(43)
@@ -223,3 +224,5 @@ if not cases_to_fix:
     batch.run()
     print("Post processing cases...")
     batch.postProcess(attempts=10, pause_time=5)
+    print("Computing statistics...")
+    batch.computeStatistics()

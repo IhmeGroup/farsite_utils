@@ -6,8 +6,29 @@ import copy
 import multiprocessing
 import numpy as np
 import time
+import matplotlib.pyplot as plt
+import matplotlib.font_manager
 
 from . import case
+
+plt.rcParams.update({
+    "text.usetex": True,
+    "font.family": "serif",
+    "font.serif": ["Computer Modern Roman"],
+})
+
+_XSMALL_SIZE = 12
+_SMALL_SIZE = 14
+_MEDIUM_SIZE = 16
+_BIGGER_SIZE = 18
+
+plt.rc('font', size=_SMALL_SIZE)          # controls default text sizes
+plt.rc('axes', titlesize=_SMALL_SIZE)     # fontsize of the axes title
+plt.rc('axes', labelsize=_MEDIUM_SIZE)    # fontsize of the x and y labels
+plt.rc('xtick', labelsize=_SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=_SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('legend', fontsize=_XSMALL_SIZE)   # legend fontsize
+plt.rc('figure', titlesize=_BIGGER_SIZE)  # fontsize of the figure title
 
 
 class CaseStatus(Enum):
@@ -139,6 +160,7 @@ class Ensemble:
     def postProcess(self, n_processes=multiprocessing.cpu_count(), attempts=1, pause_time=5):
         """Postprocess all cases in ensemble."""
         for i in range(attempts):
+            print("Attempt {0}".format(i))
             # Collect cases which have not yet been exported
             indices_to_export = []
             cases_to_export = []
@@ -151,19 +173,58 @@ class Ensemble:
             pool = multiprocessing.Pool(n_processes)
             results = pool.map(self.postProcessCase, cases_to_export)
 
+            # Determine which cases have been successful
+            cases_ignition_failed = []
+            cases_not_done_yet = []
+            for j, case_result in enumerate(results):
+                self.exported[indices_to_export[j]] = (case_result == CaseStatus.DONE)
+                if case_result == CaseStatus.IGNITION_FAILED:
+                    cases_ignition_failed.append(self.caseID(indices_to_export[j]))
+                elif case_result == CaseStatus.NOT_DONE_YET:
+                    cases_not_done_yet.append(self.caseID(indices_to_export[j]))
+            
             # If all exported, break. Otherwise report failure and try again
-            if all(results):
+            if all(self.exported):
+                for i in range(self.size):
+                    self.exported[i] = True
                 break
             else:
-                for j, case_result in enumerate(results):
-                    self.exported[indices_to_export[j]] = (case_result == CaseStatus.DONE)
-                    if case_result == CaseStatus.IGNITION_FAILED:
-                        cases_ignition_failed.append(self.caseID(indices_to_export[j]))
-                    elif case_result == CaseStatus.NOT_YET_DONE:
-                        cases_not_yet_done.append(self.caseID(indices_to_export[j]))
                 print("Failed to ignite:", *cases_ignition_failed)
-                print("Failed to postprocess:", *cases_not_yet_done)
+                print("Failed to postprocess:", *cases_not_done_yet)
                 time.sleep(pause_time)
+    
+
+    def computeStatistics(self):
+        finalBurnFraction = np.zeros((self.size))
+        for i, case in enumerate(self.cases):
+            case.readOutput()
+            finalBurnFraction[i] = case.finalBurnFraction()
+        
+        finalBurnFraction_nonan = finalBurnFraction[~np.isnan(finalBurnFraction)]
+
+        mu = finalBurnFraction_nonan.mean()
+        median = np.median(finalBurnFraction_nonan)
+        sigma = finalBurnFraction_nonan.std()
+
+        textstr = '\n'.join((
+            "$\mu = {0:.2f}$".format(mu),
+            "$\mathrm{median} = " + "{0:.2f}$".format(median),
+            "$\sigma = {0:.2f}$".format(sigma)))
+
+        fig, ax = plt.subplots()
+        ax.hist(finalBurnFraction_nonan, bins=np.linspace(0, 1, 11))
+        props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+        ax.text(0.05, 0.95, textstr, transform=ax.transAxes, fontsize=_SMALL_SIZE,
+                verticalalignment='top', bbox=props)
+        ax.set_xlabel("Final Burn Coverage")
+        ax.set_ylabel("Occurences")
+
+        import code; code.interact(local=locals())
+        plt.tight_layout()
+        plt.savefig(
+            os.path.join(self.root_dir, self.out_dir_local, "stats.png"),
+            bbox_inches='tight',
+            dpi=300)
 
 
 def main():

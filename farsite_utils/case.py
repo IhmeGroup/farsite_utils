@@ -323,8 +323,8 @@ class Case:
             _DEFAULT_YEAR,
             int(vals[0]),
             int(vals[1]),
-            int(vals[2][0:2]),
-            int(vals[2][2:4]))
+            int("{0:04d}".format(int(vals[2]))[0:2]),
+            int("{0:04d}".format(int(vals[2]))[2:4]))
     
 
     def __readNameValLine(self, line):
@@ -375,14 +375,14 @@ class Case:
                 year   = _DEFAULT_YEAR,
                 month  = int(vals[0]),
                 day    = int(vals[1]),
-                hour   = int(vals[2][0:2]),
-                minute = int(vals[2][2:4]))
+                hour   = int("{0:04d}".format(int(vals[2]))[0:2]),
+                minute = int("{0:04d}".format(int(vals[2]))[2:4]))
             entry['end'] = dt.datetime(
                 year   = _DEFAULT_YEAR,
                 month  = int(vals[0]),
                 day    = int(vals[1]),
-                hour   = int(vals[3][0:2]),
-                minute = int(vals[3][2:4]))
+                hour   = int("{0:04d}".format(int(vals[3]))[0:2]),
+                minute = int("{0:04d}".format(int(vals[3]))[2:4]))
             self.burn_periods = self.burn_periods.append(entry, ignore_index=True)
     
 
@@ -684,6 +684,20 @@ class Case:
             if self.verbose:
                 print("Computing case " + self.name + " burn map {0}/{1}".format(i+1, n_steps))
             self.burn[i] = self.__burnMap(self.perimeters_merged.loc[i].geometry)
+    
+
+    def finalBurnFraction(self):
+        """Report the fraction of the total area which was burned by the fire."""
+        if self.perimeters_merged.size == 0:
+            return np.nan
+        
+        field_area = geometry.box(
+            self.lcp.utm_west,
+            self.lcp.utm_south,
+            self.lcp.utm_east,
+            self.lcp.utm_north).area
+        burned_area = self.perimeters_merged.iloc[-1]['geometry'].area
+        return (burned_area / field_area)
 
 
     def getOutputTimes(self):

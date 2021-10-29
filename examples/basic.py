@@ -167,3 +167,5 @@ if not cases_to_fix:
     batch.run()
     print("Post processing cases...")
     batch.postProcess(attempts=10, pause_time=5)
+    print("Computing statistics...")
+    batch.computeStatistics()
