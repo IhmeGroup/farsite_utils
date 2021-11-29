@@ -11,12 +11,20 @@ from farsite_utils import case
 from farsite_utils import generate
 from farsite_utils import raws
 
-np.random.seed(42)
+def missingCases(batch, out_dir):
+    present_cases = []
+    for i in range(batch.size):
+        case_id = batch.caseID(i)
+        for file in os.listdir(out_dir):
+            if case_id in file:
+                present_cases.append(i)
+                break
+    missing_cases = [i for i in range(batch.size) if i not in present_cases]
+    return missing_cases
+
+seed = 7*42
+np.random.seed(seed)
 cases_to_fix = []
-
-if cases_to_fix:
-    np.random.seed(43)
-
 # fuels = case.FUELS_40
 fuels = case.FUELS_40_BURNABLE
 print("Loading prototype...")
@@ -29,6 +37,20 @@ batch = ensemble.Ensemble(
 batch.cases_dir_local = "./cases"
 batch.out_dir_local = "./export"
 verbose = True
+stats_only = False
+detect_cases_to_fix = True
+
+##########
+
+if stats_only:
+    batch.computeStatistics()
+    exit()
+
+elif detect_cases_to_fix:
+    np.random.seed(seed + 1)
+    print("Detecting cases to fix...")
+    cases_to_fix = missingCases(batch, os.path.join(batch.root_dir, batch.out_dir_local))
+    print("Fixing cases: " + ", ".join([str(case) for case in cases_to_fix]))
 
 shape = (prototype.lcp.num_north, prototype.lcp.num_east)
 
@@ -167,5 +189,6 @@ if not cases_to_fix:
     batch.run()
     print("Post processing cases...")
     batch.postProcess(attempts=10, pause_time=5)
-    print("Computing statistics...")
-    batch.computeStatistics()
+
+print("Computing statistics...")
+batch.computeStatistics()

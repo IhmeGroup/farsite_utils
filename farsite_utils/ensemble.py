@@ -5,6 +5,7 @@ import os
 import copy
 import multiprocessing
 import numpy as np
+import pandas as pd
 import time
 import matplotlib.pyplot as plt
 import matplotlib.font_manager
@@ -195,16 +196,21 @@ class Ensemble:
     
 
     def computeStatistics(self):
-        finalBurnFraction = np.zeros((self.size))
+        stats = pd.DataFrame()
+        stats['final_burn_fraction'] = np.zeros((self.size))
         for i, case in enumerate(self.cases):
-            case.readOutput()
-            finalBurnFraction[i] = case.finalBurnFraction()
+            try:
+                case.readOutput()
+            except FileNotFoundError:
+                stats['final_burn_fraction'][i] = np.nan
+                continue
+            stats['final_burn_fraction'][i] = case.finalBurnFraction()
         
-        finalBurnFraction_nonan = finalBurnFraction[~np.isnan(finalBurnFraction)]
-
-        mu = finalBurnFraction_nonan.mean()
-        median = np.median(finalBurnFraction_nonan)
-        sigma = finalBurnFraction_nonan.std()
+        stats.to_csv(os.path.join(self.root_dir, self.out_dir_local, "stats.csv"))
+        
+        mu = np.mean(stats['final_burn_fraction'].dropna())
+        median = np.median(stats['final_burn_fraction'].dropna())
+        sigma = np.std(stats['final_burn_fraction'].dropna())
 
         textstr = '\n'.join((
             "$\mu = {0:.2f}$".format(mu),
@@ -212,14 +218,13 @@ class Ensemble:
             "$\sigma = {0:.2f}$".format(sigma)))
 
         fig, ax = plt.subplots()
-        ax.hist(finalBurnFraction_nonan, bins=np.linspace(0, 1, 11))
+        ax.hist(stats['final_burn_fraction'].dropna(), bins=np.linspace(0, 1, 11))
         props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
         ax.text(0.05, 0.95, textstr, transform=ax.transAxes, fontsize=_SMALL_SIZE,
                 verticalalignment='top', bbox=props)
         ax.set_xlabel("Final Burn Coverage")
         ax.set_ylabel("Occurences")
 
-        import code; code.interact(local=locals())
         plt.tight_layout()
         plt.savefig(
             os.path.join(self.root_dir, self.out_dir_local, "stats.png"),

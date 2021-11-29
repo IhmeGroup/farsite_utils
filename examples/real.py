@@ -16,19 +16,40 @@ from farsite_utils import case
 from farsite_utils import generate
 from farsite_utils import raws
 
-np.random.seed(42)
-cases_to_fix = [95, 124, 250, 256, 391, 583, 710, 790, 858, 861, 892, 914, 924, 962]
-# cases_to_fix = []
+def missingCases(batch, out_dir):
+    present_cases = []
+    for i in range(batch.size):
+        case_id = batch.caseID(i)
+        for file in os.listdir(out_dir):
+            if case_id in file:
+                present_cases.append(i)
+                break
+    missing_cases = [i for i in range(batch.size) if i not in present_cases]
+    return missing_cases
 
-if cases_to_fix:
-    np.random.seed(43)
-
-n_fuels = 13
-fuels = case.FUELS_13
+seed = 8*42
+np.random.seed(seed)
+cases_to_fix = []
+n_fuels = 40
+fuels = case.FUELS_40
 not_burnable_max = 0.3
 expected_res = 30.0
-
 data_dir = "/home/ihme/mbonanni/wildfire_ml/data_real"
+print("Loading prototype...")
+prototype = case.Case("../prototype/job.slurm")
+batch = ensemble.Ensemble(
+    name      = "real",
+    root_dir  = "./",
+    n_cases   = 1000,
+    prototype = case.Case("../prototype/job.slurm"))
+batch.cases_dir_local = "./cases"
+batch.out_dir_local = "./export"
+verbose = True
+stats_only = False
+detect_cases_to_fix = True
+
+if cases_to_fix:
+    np.random.seed(seed + 1)
 
 # Create reader objects
 print("Creating reader objects...")
@@ -69,16 +90,17 @@ for key in data_raw:
     data_CA[key] = data_raw[key].read(1, window=CA_window)
     print("Successfully read " + key)
 
-print("Loading prototype...")
-prototype = case.Case("../prototype/job.slurm")
-batch = ensemble.Ensemble(
-    name      = "real",
-    root_dir  = "./",
-    n_cases   = 1000,
-    prototype = case.Case("../prototype/job.slurm"))
-batch.cases_dir_local = "./cases"
-batch.out_dir_local = "./export"
-verbose = True
+##########
+
+if stats_only:
+    batch.computeStatistics()
+    exit()
+
+elif detect_cases_to_fix:
+    np.random.seed(seed + 1)
+    print("Detecting cases to fix...")
+    cases_to_fix = missingCases(batch, os.path.join(batch.root_dir, batch.out_dir_local))
+    print("Fixing cases: " + ", ".join([str(case) for case in cases_to_fix]))
 
 shape = (prototype.lcp.num_north, prototype.lcp.num_east)
 
@@ -224,5 +246,6 @@ if not cases_to_fix:
     batch.run()
     print("Post processing cases...")
     batch.postProcess(attempts=10, pause_time=5)
-    print("Computing statistics...")
-    batch.computeStatistics()
+
+print("Computing statistics...")
+batch.computeStatistics()
