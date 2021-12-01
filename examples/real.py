@@ -27,7 +27,7 @@ def missingCases(batch, out_dir):
     missing_cases = [i for i in range(batch.size) if i not in present_cases]
     return missing_cases
 
-seed = 8*42
+seed = 11*42
 np.random.seed(seed)
 cases_to_fix = []
 n_fuels = 40
@@ -46,10 +46,22 @@ batch.cases_dir_local = "./cases"
 batch.out_dir_local = "./export"
 verbose = True
 stats_only = False
-detect_cases_to_fix = True
+detect_cases_to_fix = False
+
+##########
 
 if cases_to_fix:
     np.random.seed(seed + 1)
+
+if stats_only:
+    batch.computeStatistics()
+    exit()
+
+elif detect_cases_to_fix:
+    np.random.seed(seed + 1)
+    print("Detecting cases to fix...")
+    cases_to_fix = missingCases(batch, os.path.join(batch.root_dir, batch.out_dir_local))
+    print("Fixing cases: " + ", ".join([str(case) for case in cases_to_fix]))
 
 # Create reader objects
 print("Creating reader objects...")
@@ -90,18 +102,6 @@ for key in data_raw:
     data_CA[key] = data_raw[key].read(1, window=CA_window)
     print("Successfully read " + key)
 
-##########
-
-if stats_only:
-    batch.computeStatistics()
-    exit()
-
-elif detect_cases_to_fix:
-    np.random.seed(seed + 1)
-    print("Detecting cases to fix...")
-    cases_to_fix = missingCases(batch, os.path.join(batch.root_dir, batch.out_dir_local))
-    print("Fixing cases: " + ", ".join([str(case) for case in cases_to_fix]))
-
 shape = (prototype.lcp.num_north, prototype.lcp.num_east)
 
 for i in range(batch.size):
@@ -113,7 +113,7 @@ for i in range(batch.size):
 
     # Time parameters
     batch.cases[i].start_time = dt.datetime(2000, 1, 1, 8, 0)
-    batch.cases[i].end_time = dt.datetime(2000, 1, 1, 20, 0)
+    batch.cases[i].end_time = dt.datetime(2000, 1, 3, 20, 0)
     batch.cases[i].timestep = 7
 
     # Select random window

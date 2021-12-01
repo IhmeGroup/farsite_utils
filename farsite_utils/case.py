@@ -686,7 +686,7 @@ class Case:
             self.burn[i] = self.__burnMap(self.perimeters_merged.loc[i].geometry)
     
 
-    def finalBurnFraction(self):
+    def burnFraction(self):
         """Report the fraction of the total area which was burned by the fire."""
         if self.perimeters_merged.size == 0:
             return np.nan
@@ -696,7 +696,11 @@ class Case:
             self.lcp.utm_south,
             self.lcp.utm_east,
             self.lcp.utm_north).area
-        burned_area = self.perimeters_merged.iloc[-1]['geometry'].area
+        
+        burned_area = np.zeros(len(self.perimeters_merged['geometry']))
+        for i, perimeter in enumerate(self.perimeters_merged['geometry']):
+            burned_area[i] = perimeter.area
+        
         return (burned_area / field_area)
 
 

@@ -42,6 +42,9 @@ detect_cases_to_fix = True
 
 ##########
 
+if cases_to_fix:
+    np.random.seed(seed + 1)
+
 if stats_only:
     batch.computeStatistics()
     exit()

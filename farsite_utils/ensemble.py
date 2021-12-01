@@ -196,34 +196,79 @@ class Ensemble:
     
 
     def computeStatistics(self):
-        stats = pd.DataFrame()
-        stats['final_burn_fraction'] = np.zeros((self.size))
+
+        # Compute burn fraction over time for each case
+        burn_fraction = pd.DataFrame()
         for i, case in enumerate(self.cases):
+            print("Computing statistics: case " + self.caseID(i))
+
             try:
                 case.readOutput()
             except FileNotFoundError:
-                stats['final_burn_fraction'][i] = np.nan
+                burn_fraction[self.caseID(i)] = np.nan
                 continue
-            stats['final_burn_fraction'][i] = case.finalBurnFraction()
-        
-        stats.to_csv(os.path.join(self.root_dir, self.out_dir_local, "stats.csv"))
-        
-        mu = np.mean(stats['final_burn_fraction'].dropna())
-        median = np.median(stats['final_burn_fraction'].dropna())
-        sigma = np.std(stats['final_burn_fraction'].dropna())
+            
+            burn_fraction_i = case.burnFraction()
+            if len(burn_fraction_i) > len(burn_fraction):
+                burn_fraction = burn_fraction.reindex(list(range(0, len(burn_fraction_i)))).reset_index(drop=True)
+            else:
+                burn_fraction[self.caseID(i)] = np.nan
 
-        textstr = '\n'.join((
-            "$\mu = {0:.2f}$".format(mu),
-            "$\mathrm{median} = " + "{0:.2f}$".format(median),
-            "$\sigma = {0:.2f}$".format(sigma)))
+            burn_fraction.loc[0:len(burn_fraction_i)-1, self.caseID(i)] = burn_fraction_i
 
-        fig, ax = plt.subplots()
-        ax.hist(stats['final_burn_fraction'].dropna(), bins=np.linspace(0, 1, 11))
-        props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-        ax.text(0.05, 0.95, textstr, transform=ax.transAxes, fontsize=_SMALL_SIZE,
-                verticalalignment='top', bbox=props)
-        ax.set_xlabel("Final Burn Coverage")
-        ax.set_ylabel("Occurences")
+            # if i > 100:
+            #     break
+
+        # Compute histograms
+        bins = np.linspace(0, 1, 21)
+        hist = np.zeros((len(burn_fraction), len(bins)-1))
+        edges = np.zeros((len(burn_fraction)+1, len(bins)))
+        time = np.zeros((len(burn_fraction)+1, len(bins)))
+        for i in range(len(burn_fraction)):
+            hist[i,:], edges[i,:] = np.histogram(burn_fraction.iloc[i], bins=bins)
+            time[i,:] = i
+        time[len(burn_fraction), :] = len(burn_fraction)
+        edges[len(burn_fraction), :] = edges[len(burn_fraction)-1, :]
+        
+        # Compute aggregate statistics
+        mu = np.nanmean(burn_fraction.to_numpy(), axis=1)
+        median = np.nanmedian(burn_fraction.to_numpy(), axis=1)
+        sigma = np.nanstd(burn_fraction.to_numpy(), axis=1)
+        bound_u = mu + 2*sigma
+        bound_l = mu - 2*sigma
+        bound_l[bound_l < 0] = np.nan
+
+        burn_fraction['mu'] = mu
+        burn_fraction['median'] = median
+        burn_fraction['sigma'] = sigma
+
+        # Write stats to file
+        burn_fraction.to_csv(os.path.join(self.root_dir, self.out_dir_local, "stats.csv"))
+
+        # Plot stats
+        time_vec = np.arange(0, len(burn_fraction))
+        lw = 3
+        fig, axs = plt.subplots(1, 2, figsize=(12,5))
+        im = axs[0].pcolor(edges, time, hist)
+        plt.colorbar(im, ax=axs[0], label="Occurences")
+        axs[0].set_xlabel("Burned Area Fraction")
+        axs[0].set_ylabel("Step")
+        axs[0].plot(mu, time_vec, color='magenta', linewidth=lw, label="$\mu$")
+        axs[0].plot(median, time_vec, color='r', linewidth=lw, label="median")
+        axs[0].plot(bound_u, time_vec, color='k', linewidth=lw, linestyle='--', label="$\mu \pm 2\sigma$")
+        axs[0].plot(bound_l, time_vec, color='k', linewidth=lw, linestyle='--')
+        axs[0].legend(loc='lower right')
+
+        hist_norm = hist / hist.max(axis=1, keepdims=True)
+        im = axs[1].pcolor(edges, time, hist_norm)
+        plt.colorbar(im, ax=axs[1], label="Occurences / Max Occurences")
+        axs[1].set_xlabel("Burned Area Fraction")
+        axs[1].set_ylabel("Step")
+        axs[1].plot(mu, time_vec, color='magenta', linewidth=lw, label="$\mu$")
+        axs[1].plot(median, time_vec, color='r', linewidth=lw, label="median")
+        axs[1].plot(bound_u, time_vec, color='k', linewidth=lw, linestyle='--', label="$\mu \pm 2\sigma$")
+        axs[1].plot(bound_l, time_vec, color='k', linewidth=lw, linestyle='--')
+        axs[1].legend(loc='lower right')
 
         plt.tight_layout()
         plt.savefig(
