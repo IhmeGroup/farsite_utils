@@ -3,6 +3,7 @@
 from enum import Enum
 import os
 import copy
+import functools
 import multiprocessing
 import numpy as np
 import pandas as pd
@@ -42,7 +43,7 @@ class Ensemble:
     """This class represents an ensemble of FARSITE cases."""
 
     def __init__(self, name=None, root_dir=None, n_cases=0, prototype=None):
-        self.cases = [copy.deepcopy(prototype) for i in range(n_cases)]
+        self.cases = np.array([copy.deepcopy(prototype) for i in range(n_cases)])
         self.cases_dir_local = "./cases"
         self.out_dir_local = "./export"
         if name:
@@ -104,11 +105,13 @@ class Ensemble:
     @cases.setter
     def cases(self, value):
         """Set the entire list of Cases."""
-        if not isinstance(value, list):
-            raise TypeError("Ensemble.cases must be a list of Cases.")
+        if not isinstance(value, np.ndarray):
+            raise TypeError("Ensemble.cases must be a 1D np.array of Cases.")
+        if value.ndim != 1:
+            raise TypeError("Ensemble.cases must be a 1D np.array of Cases.")
         for item in value:
             if not isinstance(item, case.Case):
-                raise TypeError("Ensemble.cases must be a list of Cases.")
+                raise TypeError("Ensemble.cases must be a 1D np.array of Cases.")
         self._cases = value
     
 
@@ -133,46 +136,54 @@ class Ensemble:
         case.write()
     
 
-    def write(self, n_processes=multiprocessing.cpu_count()):
+    def write(self, case_ids=None, n_processes=multiprocessing.cpu_count()):
         """Write all cases in ensemble."""
+        if case_ids is None:
+            case_ids = np.arange(self.size)
         pool = multiprocessing.Pool(n_processes)
-        pool.map(self.writeCase, self.cases)
+        pool.map(self.writeCase, self.cases[case_ids])
     
 
-    def run(self):
+    def run(self, case_ids=None):
         """Run all cases in ensemble."""
-        for case in self.cases:
+        if case_ids is None:
+            case_ids = np.arange(self.size)
+        for case in self.cases[case_ids]:
             case.run()
     
 
-    def postProcessCase(self, case):
+    def postProcessCase(self, case, render=False):
         """Postprocess a single case and return success status."""
         if case.ignitionFailed():
             return CaseStatus.IGNITION_FAILED
         if not case.isDone():
             return CaseStatus.NOT_DONE_YET
         case.readOutput()
-        case.renderOutput(os.path.join(case.root_dir, case.name))
+        if render:
+            case.renderOutput(os.path.join(case.root_dir, case.name))
         case.computeBurnMaps()
         case.exportData(os.path.join(self.root_dir, self.out_dir_local, case.name))
         return CaseStatus.DONE
     
 
-    def postProcess(self, n_processes=multiprocessing.cpu_count(), attempts=1, pause_time=5):
+    def postProcess(self, case_ids=None, render=False, n_processes=multiprocessing.cpu_count(), 
+                    attempts=1, pause_time=5):
         """Postprocess all cases in ensemble."""
+        if case_ids is None:
+            case_ids = np.arange(self.size)
         for i in range(attempts):
             print("Attempt {0}".format(i))
             # Collect cases which have not yet been exported
             indices_to_export = []
             cases_to_export = []
-            for j, case in enumerate(self.cases):
+            for j, case in enumerate(self.cases[case_ids]):
                 if not self.exported[j]:
                     indices_to_export.append(j)
                     cases_to_export.append(case)
             
             # Postprocess remaining cases in parallel
             pool = multiprocessing.Pool(n_processes)
-            results = pool.map(self.postProcessCase, cases_to_export)
+            results = pool.map(functools.partial(self.postProcessCase, render=render), cases_to_export)
 
             # Determine which cases have been successful
             cases_ignition_failed = []
@@ -184,15 +195,72 @@ class Ensemble:
                 elif case_result == CaseStatus.NOT_DONE_YET:
                     cases_not_done_yet.append(self.caseID(indices_to_export[j]))
             
-            # If all exported, break. Otherwise report failure and try again
-            if all(self.exported):
-                for i in range(self.size):
-                    self.exported[i] = True
+            # If no remaining cases, break. Otherwise report failure and try again
+            if (not cases_ignition_failed) and (not cases_not_done_yet):
                 break
             else:
                 print("Failed to ignite:", *cases_ignition_failed)
                 print("Failed to postprocess:", *cases_not_done_yet)
                 time.sleep(pause_time)
+    
+
+    def __computeAndPlotHistogram(self, data, name, title, bins=None):
+        n = len(data)
+
+        # Compute histograms
+        hist = np.zeros((n, len(bins)-1))
+        edges = np.zeros((n+1, len(bins)))
+        time = np.zeros((n+1, len(bins)))
+        for i in range(n):
+            hist[i,:], edges[i,:] = np.histogram(data.iloc[i], bins=bins)
+            time[i,:] = i
+        time[n, :] = n
+        edges[n, :] = edges[n-1, :]
+
+        # Compute aggregate statistics
+        mu = np.nanmean(data.to_numpy(), axis=1)
+        median = np.nanmedian(data.to_numpy(), axis=1)
+        sigma = np.nanstd(data.to_numpy(), axis=1)
+        bound_u = mu + 2*sigma
+        bound_l = mu - 2*sigma
+
+        data['mu'] = mu
+        data['median'] = median
+        data['sigma'] = sigma
+
+        # Write stats to file
+        data.to_csv(os.path.join(self.root_dir, self.out_dir_local, "stats_" + name + ".csv"))
+
+        # Plot stats
+        time_vec = np.arange(0, n)
+        lw = 3
+        fig, axs = plt.subplots(1, 2, figsize=(12,5))
+        im = axs[0].pcolor(edges, time, hist)
+        plt.colorbar(im, ax=axs[0], label="Occurrences")
+        axs[0].set_xlabel(title)
+        axs[0].set_ylabel("Step")
+        axs[0].plot(mu, time_vec, color='magenta', linewidth=lw, label="$\mu$")
+        axs[0].plot(median, time_vec, color='r', linewidth=lw, label="median")
+        axs[0].plot(bound_u, time_vec, color='k', linewidth=lw, linestyle='--', label="$\mu \pm 2\sigma$")
+        axs[0].plot(bound_l, time_vec, color='k', linewidth=lw, linestyle='--')
+        axs[0].legend(loc='lower right')
+
+        hist_norm = hist / hist.max(axis=1, keepdims=True)
+        im = axs[1].pcolor(edges, time, hist_norm)
+        plt.colorbar(im, ax=axs[1], label="Occurrences / Max Occurrences")
+        axs[1].set_xlabel(title)
+        axs[1].set_ylabel("Step")
+        axs[1].plot(mu, time_vec, color='magenta', linewidth=lw, label="$\mu$")
+        axs[1].plot(median, time_vec, color='r', linewidth=lw, label="median")
+        axs[1].plot(bound_u, time_vec, color='k', linewidth=lw, linestyle='--', label="$\mu \pm 2\sigma$")
+        axs[1].plot(bound_l, time_vec, color='k', linewidth=lw, linestyle='--')
+        axs[1].legend(loc='lower right')
+
+        plt.tight_layout()
+        plt.savefig(
+            os.path.join(self.root_dir, self.out_dir_local, "stats_" + name + ".png"),
+            bbox_inches='tight',
+            dpi=300)
     
 
     def computeStatistics(self):
@@ -216,65 +284,26 @@ class Ensemble:
 
             burn_fraction.loc[0:len(burn_fraction_i)-1, self.caseID(i)] = burn_fraction_i
 
-            # if i > 100:
-            #     break
+        burn_radius = np.sqrt(burn_fraction * self.cases[0].lcp.area / np.pi)
+        front_speed = pd.DataFrame(0, index=burn_radius.index, columns=burn_radius.columns)
+        front_speed[:] = np.gradient(burn_radius, self.cases[0].timestep, axis=0)
 
-        # Compute histograms
-        bins = np.linspace(0, 1, 21)
-        hist = np.zeros((len(burn_fraction), len(bins)-1))
-        edges = np.zeros((len(burn_fraction)+1, len(bins)))
-        time = np.zeros((len(burn_fraction)+1, len(bins)))
-        for i in range(len(burn_fraction)):
-            hist[i,:], edges[i,:] = np.histogram(burn_fraction.iloc[i], bins=bins)
-            time[i,:] = i
-        time[len(burn_fraction), :] = len(burn_fraction)
-        edges[len(burn_fraction), :] = edges[len(burn_fraction)-1, :]
-        
-        # Compute aggregate statistics
-        mu = np.nanmean(burn_fraction.to_numpy(), axis=1)
-        median = np.nanmedian(burn_fraction.to_numpy(), axis=1)
-        sigma = np.nanstd(burn_fraction.to_numpy(), axis=1)
-        bound_u = mu + 2*sigma
-        bound_l = mu - 2*sigma
-        bound_l[bound_l < 0] = np.nan
-
-        burn_fraction['mu'] = mu
-        burn_fraction['median'] = median
-        burn_fraction['sigma'] = sigma
-
-        # Write stats to file
-        burn_fraction.to_csv(os.path.join(self.root_dir, self.out_dir_local, "stats.csv"))
-
-        # Plot stats
-        time_vec = np.arange(0, len(burn_fraction))
-        lw = 3
-        fig, axs = plt.subplots(1, 2, figsize=(12,5))
-        im = axs[0].pcolor(edges, time, hist)
-        plt.colorbar(im, ax=axs[0], label="Occurences")
-        axs[0].set_xlabel("Burned Area Fraction")
-        axs[0].set_ylabel("Step")
-        axs[0].plot(mu, time_vec, color='magenta', linewidth=lw, label="$\mu$")
-        axs[0].plot(median, time_vec, color='r', linewidth=lw, label="median")
-        axs[0].plot(bound_u, time_vec, color='k', linewidth=lw, linestyle='--', label="$\mu \pm 2\sigma$")
-        axs[0].plot(bound_l, time_vec, color='k', linewidth=lw, linestyle='--')
-        axs[0].legend(loc='lower right')
-
-        hist_norm = hist / hist.max(axis=1, keepdims=True)
-        im = axs[1].pcolor(edges, time, hist_norm)
-        plt.colorbar(im, ax=axs[1], label="Occurences / Max Occurences")
-        axs[1].set_xlabel("Burned Area Fraction")
-        axs[1].set_ylabel("Step")
-        axs[1].plot(mu, time_vec, color='magenta', linewidth=lw, label="$\mu$")
-        axs[1].plot(median, time_vec, color='r', linewidth=lw, label="median")
-        axs[1].plot(bound_u, time_vec, color='k', linewidth=lw, linestyle='--', label="$\mu \pm 2\sigma$")
-        axs[1].plot(bound_l, time_vec, color='k', linewidth=lw, linestyle='--')
-        axs[1].legend(loc='lower right')
-
-        plt.tight_layout()
-        plt.savefig(
-            os.path.join(self.root_dir, self.out_dir_local, "stats.png"),
-            bbox_inches='tight',
-            dpi=300)
+        n_bins = 21
+        self.__computeAndPlotHistogram(
+            burn_fraction,
+            "burn_fraction",
+            "Burned Area Fraction",
+            bins=np.linspace(0, 1, n_bins))
+        self.__computeAndPlotHistogram(
+            burn_radius,
+            "burn_radius",
+            "Burned Area Equivalent Circle Radius",
+            bins=np.linspace(0, burn_radius.dropna().to_numpy().max()))
+        self.__computeAndPlotHistogram(
+            front_speed,
+            "front_speed",
+            "Effective Front Speed",
+            bins=np.linspace(0, front_speed.dropna().to_numpy().max()))
 
 
 def main():

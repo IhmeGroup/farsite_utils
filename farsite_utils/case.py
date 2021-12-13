@@ -600,19 +600,22 @@ class Case:
         self.__convertAndMergePerimeters()
     
 
-    def __plotPerimeters(self, ax, n_perimeters):
+    def __plotPerimeters(self, ax, perimeters):
         """Add perimeters to plot."""
-        plot_interval = int(np.round(len(self.perimeters_merged.geometry) / n_perimeters))
-        for i, per in enumerate(self.perimeters_merged.geometry):
-            if i % plot_interval:
-                continue
+        if type(perimeters) == int:
+            steps_out = np.round(np.linspace(0, self.burnDuration()-1, perimeters)).astype(int)
+        elif type(perimeters) == list:
+            steps_out = perimeters
+        else:
+            raise TypeError("perimeters must be an int or a list")
+
+        for i in steps_out:
+            per = self.perimeters_merged.geometry[i]
 
             if isinstance(per, geometry.MultiPolygon):
                 polys = list(per)
             else:
                 polys = [per]
-            
-            # import code; code.interact(local=locals())
 
             for poly in polys:
                 x, y = poly.exterior.xy
@@ -621,7 +624,7 @@ class Case:
                 ax.plot(x_scaled, y_scaled, color='k', linewidth=1)
     
 
-    def renderOutput(self, filename):
+    def renderOutput(self, filename, perimeters=5):
         """Plot fire and save figure to file."""
         fig, axs = plt.subplots(2, 2)
         extent = (
@@ -643,7 +646,7 @@ class Case:
         plt.colorbar(im4, ax=axs[1,1], label="Spread Rate (km/h)")
 
         for ax in axs.reshape(-1):
-            self.__plotPerimeters(ax, 5)
+            self.__plotPerimeters(ax, perimeters)
             ax.set_xlabel("y (km)")
             ax.set_ylabel("x (km)")
         
@@ -691,17 +694,18 @@ class Case:
         if self.perimeters_merged.size == 0:
             return np.nan
         
-        field_area = geometry.box(
-            self.lcp.utm_west,
-            self.lcp.utm_south,
-            self.lcp.utm_east,
-            self.lcp.utm_north).area
-        
         burned_area = np.zeros(len(self.perimeters_merged['geometry']))
         for i, perimeter in enumerate(self.perimeters_merged['geometry']):
             burned_area[i] = perimeter.area
         
-        return (burned_area / field_area)
+        return (burned_area / self.lcp.area)
+    
+
+    def burnDuration(self):
+        if self.perimeters_merged.size == 0:
+            return np.nan
+        
+        return len(self.perimeters_merged)
 
 
     def getOutputTimes(self):

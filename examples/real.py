@@ -29,7 +29,7 @@ def missingCases(batch, out_dir):
 
 seed = 11*42
 np.random.seed(seed)
-cases_to_fix = []
+cases_to_run = []
 n_fuels = 40
 fuels = case.FUELS_40
 not_burnable_max = 0.3
@@ -50,18 +50,18 @@ detect_cases_to_fix = False
 
 ##########
 
-if cases_to_fix:
+if cases_to_run:
     np.random.seed(seed + 1)
-
 if stats_only:
     batch.computeStatistics()
     exit()
-
 elif detect_cases_to_fix:
     np.random.seed(seed + 1)
     print("Detecting cases to fix...")
-    cases_to_fix = missingCases(batch, os.path.join(batch.root_dir, batch.out_dir_local))
-    print("Fixing cases: " + ", ".join([str(case) for case in cases_to_fix]))
+    cases_to_run = missingCases(batch, os.path.join(batch.root_dir, batch.out_dir_local))
+    print("Fixing cases: " + ", ".join([str(case) for case in cases_to_run]))
+else:
+    cases_to_run = [i for i in range(batch.size)]
 
 # Create reader objects
 print("Creating reader objects...")
@@ -103,25 +103,27 @@ for key in data_raw:
     print("Successfully read " + key)
 
 shape = (prototype.lcp.num_north, prototype.lcp.num_east)
+rand_x = np.zeros(batch.size, dtype=int)
+rand_y = np.zeros(batch.size, dtype=int)
 
 for i in range(batch.size):
 
-    if cases_to_fix and not i in cases_to_fix:
+    if cases_to_run and not i in cases_to_run:
         continue
 
     print("Generating case " + batch.caseID(i))
 
     # Time parameters
     batch.cases[i].start_time = dt.datetime(2000, 1, 1, 8, 0)
-    batch.cases[i].end_time = dt.datetime(2000, 1, 3, 20, 0)
+    batch.cases[i].end_time = dt.datetime(2000, 1, 4, 8, 0)
     batch.cases[i].timestep = 7
 
     # Select random window
     valid = False
     while not valid:
-        rand_x = np.random.randint(0, data_CA['fuel'].shape[0] - shape[0])
-        rand_y = np.random.randint(0, data_CA['fuel'].shape[1] - shape[1])
-        sample = data_CA['fuel'][rand_x:rand_x + shape[0], rand_y:rand_y + shape[1]]
+        rand_x[i] = np.random.randint(0, data_CA['fuel'].shape[0] - shape[0])
+        rand_y[i] = np.random.randint(0, data_CA['fuel'].shape[1] - shape[1])
+        sample = data_CA['fuel'][rand_x[i]:rand_x[i] + shape[0], rand_y[i]:rand_y[i] + shape[1]]
         not_burnable = np.isin(sample, [-9999] + case.FUELS_NB)
         valid = (np.sum(not_burnable) / not_burnable.size) < not_burnable_max
 
@@ -154,14 +156,14 @@ for i in range(batch.size):
     # batch.cases[i].lcp.layers['elevation'].data = elevation.astype(np.int16)
     # DEBUG - compute slope and aspect from elevation
 
-    batch.cases[i].lcp.layers['aspect'   ].data = data_CA['aspect'   ][rand_x:rand_x + shape[0], rand_y:rand_y + shape[1]].astype(np.int16)
-    batch.cases[i].lcp.layers['slope'    ].data = data_CA['slope'    ][rand_x:rand_x + shape[0], rand_y:rand_y + shape[1]].astype(np.int16)
-    batch.cases[i].lcp.layers['elevation'].data = data_CA['elevation'][rand_x:rand_x + shape[0], rand_y:rand_y + shape[1]].astype(np.int16)
-    batch.cases[i].lcp.layers['fuel'     ].data = data_CA['fuel'     ][rand_x:rand_x + shape[0], rand_y:rand_y + shape[1]].astype(np.int16)
-    batch.cases[i].lcp.layers['cover'    ].data = data_CA['cover'    ][rand_x:rand_x + shape[0], rand_y:rand_y + shape[1]].astype(np.int16)
-    batch.cases[i].lcp.layers['height'   ].data = data_CA['height'   ][rand_x:rand_x + shape[0], rand_y:rand_y + shape[1]].astype(np.int16)
-    batch.cases[i].lcp.layers['base'     ].data = data_CA['base'     ][rand_x:rand_x + shape[0], rand_y:rand_y + shape[1]].astype(np.int16)
-    batch.cases[i].lcp.layers['density'  ].data = data_CA['density'  ][rand_x:rand_x + shape[0], rand_y:rand_y + shape[1]].astype(np.int16)
+    batch.cases[i].lcp.layers['aspect'   ].data = data_CA['aspect'   ][rand_x[i]:rand_x[i] + shape[0], rand_y[i]:rand_y[i] + shape[1]].astype(np.int16)
+    batch.cases[i].lcp.layers['slope'    ].data = data_CA['slope'    ][rand_x[i]:rand_x[i] + shape[0], rand_y[i]:rand_y[i] + shape[1]].astype(np.int16)
+    batch.cases[i].lcp.layers['elevation'].data = data_CA['elevation'][rand_x[i]:rand_x[i] + shape[0], rand_y[i]:rand_y[i] + shape[1]].astype(np.int16)
+    batch.cases[i].lcp.layers['fuel'     ].data = data_CA['fuel'     ][rand_x[i]:rand_x[i] + shape[0], rand_y[i]:rand_y[i] + shape[1]].astype(np.int16)
+    batch.cases[i].lcp.layers['cover'    ].data = data_CA['cover'    ][rand_x[i]:rand_x[i] + shape[0], rand_y[i]:rand_y[i] + shape[1]].astype(np.int16)
+    batch.cases[i].lcp.layers['height'   ].data = data_CA['height'   ][rand_x[i]:rand_x[i] + shape[0], rand_y[i]:rand_y[i] + shape[1]].astype(np.int16)
+    batch.cases[i].lcp.layers['base'     ].data = data_CA['base'     ][rand_x[i]:rand_x[i] + shape[0], rand_y[i]:rand_y[i] + shape[1]].astype(np.int16)
+    batch.cases[i].lcp.layers['density'  ].data = data_CA['density'  ][rand_x[i]:rand_x[i] + shape[0], rand_y[i]:rand_y[i] + shape[1]].astype(np.int16)
     batch.cases[i].lcp.layers['duff'     ].data = np.zeros(shape, dtype=np.int16)
     batch.cases[i].lcp.layers['woody'    ].data = np.zeros(shape, dtype=np.int16)
 
@@ -228,24 +230,16 @@ for i in range(batch.size):
     batch.cases[i].number_processors = 1
     batch.cases[i].out_type = 0
 
-    # Write and run fix cases
-    if cases_to_fix:
-        batch.cases[i].write()
-        batch.cases[i].run()
-        while not batch.cases[i].isDone():
-            time.sleep(5)
-        batch.cases[i].readOutput()
-        batch.cases[i].renderOutput(os.path.join(batch.cases[i].root_dir, batch.cases[i].name))
-        batch.cases[i].computeBurnMaps()
-        batch.cases[i].exportData(os.path.join(batch.root_dir, batch.out_dir_local, batch.cases[i].name))
+locs = pd.DataFrame(columns=['x', 'y'])
+locs['x'] = rand_x
+locs['y'] = rand_y
+locs.to_csv("locs.csv")
 
-if not cases_to_fix:
-    print("Writing cases...")
-    batch.write()
-    print("Running cases...")
-    batch.run()
-    print("Post processing cases...")
-    batch.postProcess(attempts=10, pause_time=5)
-
+print("Writing cases...")
+batch.write(cases_to_run)
+print("Running cases...")
+batch.run(cases_to_run)
+print("Post processing cases...")
+batch.postProcess(cases_to_run, attempts=10, pause_time=5)
 print("Computing statistics...")
 batch.computeStatistics()

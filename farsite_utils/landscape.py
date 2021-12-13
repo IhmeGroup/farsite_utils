@@ -234,6 +234,11 @@ class Landscape:
         return (self.num_north, self.num_east)
     
 
+    @property
+    def area(self):
+        return self.size[0] * self.size[1]
+    
+
     @shape.setter
     def shape(self, value):
         self.num_north = value[0]
