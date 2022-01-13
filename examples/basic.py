@@ -22,7 +22,7 @@ def missingCases(batch, out_dir):
     missing_cases = [i for i in range(batch.size) if i not in present_cases]
     return missing_cases
 
-seed = 20*42
+seed = 15*42
 np.random.seed(seed)
 cases_to_run = []
 # fuels = case.FUELS_40
@@ -32,13 +32,13 @@ prototype = case.Case("../prototype/job.slurm")
 batch = ensemble.Ensemble(
     name      = "basic",
     root_dir  = "./",
-    n_cases   = 1000,
+    n_cases   = 5,
     prototype = case.Case("../prototype/job.slurm"))
 batch.cases_dir_local = "./cases"
 batch.out_dir_local = "./export"
 verbose = True
-stats_only = True
-detect_cases_to_fix = True
+stats_only = False
+detect_cases_to_fix = False
 
 ##########
 
@@ -66,8 +66,8 @@ for i in range(batch.size):
 
     # Time parameters
     batch.cases[i].start_time = dt.datetime(2000, 1, 1, 8, 0)
-    batch.cases[i].end_time = dt.datetime(2000, 1, 3, 20, 0)
-    batch.cases[i].timestep = 35
+    batch.cases[i].end_time = dt.datetime(2000, 1, 4, 1, 0)
+    batch.cases[i].timestep = 15
 
     # Ignition
     width = batch.cases[i].lcp.utm_east - batch.cases[i].lcp.utm_west
@@ -75,7 +75,7 @@ for i in range(batch.size):
     accessible_fraction = 0.5
     batch.cases[i].ignition.geometry[0] = generate.regularPolygon(
         sides       = 8,
-        radius      = 0.01 * (batch.cases[i].lcp.utm_east - batch.cases[i].lcp.utm_west),
+        radius      = 0.01 * width,
         rotation    = 0,
         translation = (
             np.random.uniform(
@@ -161,9 +161,9 @@ for i in range(batch.size):
     models = [0] + fuels
     batch.cases[i].fuel_moistures = pd.DataFrame({
         'model':           models,
-        '1_hour':          list(np.random.randint(2, 40,  len(models))),
-        '10_hour':         list(np.random.randint(2, 40,  len(models))),
-        '100_hour':        list(np.random.randint(2, 40,  len(models))),
+        '1_hour':          list(np.random.randint(2,  40,  len(models))),
+        '10_hour':         list(np.random.randint(2,  40,  len(models))),
+        '100_hour':        list(np.random.randint(2,  40,  len(models))),
         'live_herbaceous': list(np.random.randint(30, 100, len(models))),
         'live_woody':      list(np.random.randint(30, 100, len(models)))})
     
@@ -179,6 +179,7 @@ batch.write(cases_to_run)
 print("Running cases...")
 batch.run(cases_to_run)
 print("Post processing cases...")
-batch.postProcess(cases_to_run, attempts=10, pause_time=5)
-print("Computing statistics...")
-batch.computeStatistics()
+cases_not_done = batch.postProcess(cases_to_run, attempts=10, pause_time=5)
+if not cases_not_done:
+    print("Computing statistics...")
+    batch.computeStatistics()

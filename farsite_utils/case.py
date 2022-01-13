@@ -664,10 +664,10 @@ class Case:
         for i in range(self.lcp.num_north):
             for j in range(self.lcp.num_east):
                 cell = geometry.box(
-                    (j)   * self.lcp.res_x + self.lcp.utm_west,
-                    (i)   * self.lcp.res_y + self.lcp.utm_south,
-                    (j+1) * self.lcp.res_x + self.lcp.utm_west,
-                    (i+1) * self.lcp.res_y + self.lcp.utm_south)
+                     (j)   * self.lcp.res_x + self.lcp.utm_west,
+                    -(i)   * self.lcp.res_y + self.lcp.utm_north,
+                     (j+1) * self.lcp.res_x + self.lcp.utm_west,
+                    -(i+1) * self.lcp.res_y + self.lcp.utm_north)
                 if prepared_perimeter.contains(cell):
                     burn[i,j] = 1.0
                 elif prepared_perimeter.intersects(cell):

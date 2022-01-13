@@ -168,8 +168,8 @@ class RAWS:
         wind_east  = np.zeros([len(query_times), shape[0], shape[1]])
         wind_north = np.zeros([len(query_times), shape[0], shape[1]])
         for i in range(len(query_times)):
-            wind_east[i,:]  = -wind_speed[i] * np.cos(wind_direction[i] + np.pi/2)
-            wind_north[i,:] = -wind_speed[i] * np.sin(wind_direction[i] + np.pi/2)
+            wind_east[i,:]  = -wind_speed[i] * np.cos(-np.radians(wind_direction[i]) + np.pi/2)
+            wind_north[i,:] = -wind_speed[i] * np.sin(-np.radians(wind_direction[i]) + np.pi/2)
         
         # Write
         np.save(prefix + "_wind_east.npy",  wind_east)

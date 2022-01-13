@@ -202,6 +202,8 @@ class Ensemble:
                 print("Failed to ignite:", *cases_ignition_failed)
                 print("Failed to postprocess:", *cases_not_done_yet)
                 time.sleep(pause_time)
+        
+        return cases_ignition_failed + cases_not_done_yet
     
 
     def __computeAndPlotHistogram(self, data, name, title, bins=None):

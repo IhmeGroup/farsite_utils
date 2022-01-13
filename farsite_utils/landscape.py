@@ -391,8 +391,26 @@ class Landscape:
 
     def writeNPY(self, prefix):
         # Write required layers
-        slope_east  = self.layers['slope'].data * np.cos( self.layers['aspect'].data + np.pi/2)
-        slope_north = self.layers['slope'].data * np.sin(-self.layers['aspect'].data - np.pi/2)
+        # NOTE: Aspect refers to DOWN-SLOPE direction, measured CLOCKWISE from NORTH!
+        
+        # Perform unit conversions
+        if self.layers['slope'].unit_opts == 0: # Data in degrees
+            slope = -np.radians(self.layers['slope'].data)
+        elif self.layers['slope'].unit_opts == 1: # Data in percent
+            slope = -np.arctan(self.layers['slope'].data / 100)
+        
+        if self.layers['aspect'].unit_opts == 0: # Data in GRASS categories (1-25, 15 deg increments, 25=flat)
+            aspect = np.radians(self.layers['aspect'].data * 15)
+            # Handle flat case
+            aspect[self.layers['aspect'].data == 25] = 0
+            slope[self.layers['aspect'].data == 25] = 0
+        elif self.layers['aspect'].unit_opts == 1: # Data in GRASS degress (CCW from EAST)
+            aspect = np.radians(self.layers['aspect'].data)
+        elif self.layers['aspect'].unit_opts == 2: # Data in azimuth degrees (CW from NORTH)
+            aspect = -np.radians(self.layers['aspect'].data) + np.pi/2
+        
+        slope_east  = np.tan(slope) * np.cos(aspect)
+        slope_north = np.tan(slope) * np.sin(aspect)
         np.save(prefix + "_slope_east", slope_east)
         np.save(prefix + "_slope_north", slope_north)
         np.save(prefix + "_elevation", self.layers['elevation'].data)

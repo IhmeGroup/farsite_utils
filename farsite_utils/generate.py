@@ -88,10 +88,11 @@ def randomPatchy(field_shape, vals, base, p_filled, patch_sides, patch_radius_me
 
 def gradient(field_shape, aspect, slope, length_scale=1.0, dtype=None):
     """Generate field with constant given slope in given direction.
+    Aspect refers to DOWN-SLOPE direction, measured CLOCKWISE from NORTH.
     All angles in radians."""
 
-    plane_norm = np.array([np.sin(slope) * np.cos( aspect + np.pi/2),
-                           np.sin(slope) * np.sin(-aspect - np.pi/2),
+    plane_norm = np.array([np.sin(slope) * np.cos(aspect + np.pi/2),
+                           np.sin(slope) * np.sin(aspect + np.pi/2),
                            np.cos(slope)])
     
     x = np.arange(field_shape[0])
