@@ -22,9 +22,20 @@ def missingCases(batch, out_dir):
     missing_cases = [i for i in range(batch.size) if i not in present_cases]
     return missing_cases
 
+def detectFixes(batch, missing_cases):
+    cases_to_run = []
+    cases_to_post = []
+    for case_id in missing_cases:
+        if batch.cases[case_id].ignitionFailed():
+            cases_to_run.append(case_id)
+        elif batch.cases[case_id].isDone():
+            cases_to_post.append(case_id)
+    return (cases_to_run, cases_to_post)
+
 seed = 9*42
 np.random.seed(seed)
 cases_to_run = []
+cases_to_post = []
 fuels = [101]
 print("Loading prototype...")
 prototype = case.Case("../prototype/job.slurm")
@@ -41,7 +52,7 @@ detect_cases_to_fix = False
 
 ##########
 
-if cases_to_run:
+if cases_to_run or cases_to_post:
     np.random.seed(seed + 1)
 if stats_only:
     batch.computeStatistics()
@@ -49,8 +60,10 @@ if stats_only:
 elif detect_cases_to_fix:
     np.random.seed(seed + 1)
     print("Detecting cases to fix...")
-    cases_to_run = missingCases(batch, os.path.join(batch.root_dir, batch.out_dir_local))
-    print("Fixing cases: " + ", ".join([str(case) for case in cases_to_run]))
+    missing_cases = missingCases(batch, os.path.join(batch.root_dir, batch.out_dir_local))
+    cases_to_run, cases_to_fix = detectFixes(batch, missing_cases)
+    print("Running cases: " + ", ".join([str(case) for case in cases_to_run]))
+    print("Post-processing cases: " + ", ".join([str(case) for case in cases_to_post]))
 else:
     cases_to_run = [i for i in range(batch.size)]
 
