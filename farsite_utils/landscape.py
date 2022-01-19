@@ -409,8 +409,8 @@ class Landscape:
         elif self.layers['aspect'].unit_opts == 2: # Data in azimuth degrees (CW from NORTH)
             aspect = -np.radians(self.layers['aspect'].data) + np.pi/2
         
-        slope_east  = np.tan(slope) * np.cos(aspect)
-        slope_north = np.tan(slope) * np.sin(aspect)
+        slope_east  = np.arctan(np.tan(slope) * np.cos(aspect))
+        slope_north = np.arctan(np.tan(slope) * np.sin(aspect))
         np.save(prefix + "_slope_east", slope_east)
         np.save(prefix + "_slope_north", slope_north)
         np.save(prefix + "_elevation", self.layers['elevation'].data)
