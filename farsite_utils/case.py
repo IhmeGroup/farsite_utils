@@ -482,10 +482,18 @@ class Case:
         os.chdir(current_dir)
     
 
+    def detectJobID(self):
+        """Detect the job ID from the log file."""
+        files = os.listdir(self.root_dir)
+        for file in files:
+            if ".out" in file:
+                self.job_id = int(file.split(".")[1])
+                return
+    
+
     def logFile(self):
         """Find log file, if it exists."""
         files = os.listdir(self.root_dir)
-        log_file = None
         for file in files:
             if "{0:d}.out".format(self.job_id) in file:
                 return file

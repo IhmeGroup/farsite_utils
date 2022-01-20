@@ -178,7 +178,7 @@ class Ensemble:
             cases_to_export = []
             for j, case in enumerate(self.cases[case_ids]):
                 if not self.exported[j]:
-                    indices_to_export.append(j)
+                    indices_to_export.append(case_ids[j])
                     cases_to_export.append(case)
             
             # Postprocess remaining cases in parallel
