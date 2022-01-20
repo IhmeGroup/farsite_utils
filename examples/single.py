@@ -12,6 +12,9 @@ from farsite_utils import generate
 from farsite_utils import raws
 
 def missingCases(batch, out_dir):
+    if not os.path.exists(out_dir):
+        return [i for i in range(batch.size)]
+
     present_cases = []
     for i in range(batch.size):
         case_id = batch.caseID(i)
@@ -19,8 +22,7 @@ def missingCases(batch, out_dir):
             if case_id in file:
                 present_cases.append(i)
                 break
-    missing_cases = [i for i in range(batch.size) if i not in present_cases]
-    return missing_cases
+    return [i for i in range(batch.size) if i not in present_cases]
 
 def detectFixes(batch, missing_cases):
     cases_to_run = []
