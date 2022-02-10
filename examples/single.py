@@ -81,28 +81,17 @@ if cases_to_run:
         print("Generating case " + batch.caseID(i))
 
         # Time parameters
-        batch.cases[i].start_time = dt.datetime(2000, 1, 1, 8, 0)
-        batch.cases[i].end_time = dt.datetime(2000, 1, 4, 1, 0)
-        batch.cases[i].timestep = 15
-
-        # Ignition
-        width = batch.cases[i].lcp.utm_east - batch.cases[i].lcp.utm_west
-        height = batch.cases[i].lcp.utm_north - batch.cases[i].lcp.utm_south
-        accessible_fraction = 0.5
-        batch.cases[i].ignition.geometry[0] = generate.regularPolygon(
-            sides       = 8,
-            radius      = 0.01 * width,
-            rotation    = 0,
-            translation = (
-                np.random.uniform(
-                    batch.cases[i].lcp.utm_west + (accessible_fraction/2)*width, 
-                    batch.cases[i].lcp.utm_east - (accessible_fraction/2)*width),
-                np.random.uniform(
-                    batch.cases[i].lcp.utm_south + (accessible_fraction/2)*height,
-                    batch.cases[i].lcp.utm_north - (accessible_fraction/2)*height)))
+        batch.cases[i].start_time = dt.datetime(2000, 1, 1, 10, 0)
+        batch.cases[i].end_time = dt.datetime(2000, 1, 1, 14, 0)
+        batch.cases[i].timestep = 2
 
         # Landscape
         batch.cases[i].lcp.description = "Randomly-generated planar terrain"
+        batch.cases[i].lcp.latitude = 0.0
+        batch.cases[i].lcp.utm_west = 0.0
+        batch.cases[i].lcp.utm_east = shape[0] * batch.cases[i].lcp.res_x
+        batch.cases[i].lcp.utm_south = 0.0
+        batch.cases[i].lcp.utm_north = shape[1] * batch.cases[i].lcp.res_y
         aspect = np.random.uniform(0, 2*np.pi)
         slope = np.random.uniform(0, np.pi/4)
         batch.cases[i].lcp.layers['aspect'].file = ""
@@ -168,7 +157,7 @@ if cases_to_run:
             entry['precipitation' ] = 0.0
             entry['wind_speed'    ] = wind_speed
             entry['wind_direction'] = wind_direction
-            entry['cloud_cover'   ] = 25
+            entry['cloud_cover'   ] = 100
             batch.cases[i].weather.data = batch.cases[i].weather.data.append(entry, ignore_index=True)
         
         # Moisture
@@ -187,6 +176,22 @@ if cases_to_run:
         batch.cases[i].crown_fire_method = case.CrownFireMethod.FINNEY
         batch.cases[i].number_processors = 1
         batch.cases[i].out_type = 0
+
+        # Ignition
+        width = batch.cases[i].lcp.utm_east - batch.cases[i].lcp.utm_west
+        height = batch.cases[i].lcp.utm_north - batch.cases[i].lcp.utm_south
+        accessible_fraction = 0.5
+        batch.cases[i].ignition.geometry[0] = generate.regularPolygon(
+            sides       = 8,
+            radius      = 0.01 * width,
+            rotation    = 0,
+            translation = (
+                np.random.uniform(
+                    batch.cases[i].lcp.utm_west + (accessible_fraction/2)*width, 
+                    batch.cases[i].lcp.utm_east - (accessible_fraction/2)*width),
+                np.random.uniform(
+                    batch.cases[i].lcp.utm_south + (accessible_fraction/2)*height,
+                    batch.cases[i].lcp.utm_north - (accessible_fraction/2)*height)))
 
     print("Writing cases...")
     batch.write(cases_to_run)
