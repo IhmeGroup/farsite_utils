@@ -112,18 +112,18 @@ if cases_to_run:
         batch.cases[i].lcp.layers['fuel'].data = np.ones(shape, dtype=np.int16) * np.random.choice(fuels)
         batch.cases[i].lcp.layers['cover'].file = ""
         batch.cases[i].lcp.layers['cover'].unit_opts = np.int16(0) # Percent
-        batch.cases[i].lcp.layers['cover'].data = generate.randomInteger(shape, 0, 100, dtype=np.int16)
+        batch.cases[i].lcp.layers['cover'].data = np.ones(shape, dtype=np.int16) * np.random.randint(low=0, high=100, dtype=np.int16)
         batch.cases[i].lcp.crown_fuels = 21 # on
         batch.cases[i].lcp.layers['height'].file = ""
         batch.cases[i].lcp.layers['height'].unit_opts = np.int16(3) # Meters x 10
-        batch.cases[i].lcp.layers['height'].data = generate.randomInteger(shape, 30, 500, dtype=np.int16)
-        crown_ratio = generate.randomUniform(shape, 0.1, 1.0)
+        batch.cases[i].lcp.layers['height'].data = np.ones(shape, dtype=np.int16) * np.random.randint(low=30, high=500, dtype=np.int16)
+        crown_ratio = np.ones(shape) * np.random.uniform(low=0.1, high=1.0)
         batch.cases[i].lcp.layers['base'].file = ""
         batch.cases[i].lcp.layers['base'].unit_opts = np.int16(3) # Meters x 10
         batch.cases[i].lcp.layers['base'].data = np.round((1-crown_ratio) * batch.cases[i].lcp.layers['height'].data).astype(np.int16)
         batch.cases[i].lcp.layers['density'].file = ""
         batch.cases[i].lcp.layers['density'].unit_opts = np.int16(3) # kg / m^3
-        batch.cases[i].lcp.layers['density'].data = generate.randomInteger(shape, 0, 40, dtype=np.int16)
+        batch.cases[i].lcp.layers['density'].data = np.ones(shape, dtype=np.int16) * np.random.randint(low=0, high=40, dtype=np.int16)
         batch.cases[i].lcp.ground_fuels = 20 # off
         batch.cases[i].lcp.layers['duff'].file = ""
         batch.cases[i].lcp.layers['duff'].data = np.zeros(shape, dtype=np.int16)
