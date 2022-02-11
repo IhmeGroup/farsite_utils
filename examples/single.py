@@ -45,13 +45,13 @@ prototype = case.Case("../prototype/job.slurm")
 batch = ensemble.Ensemble(
     name      = "single",
     root_dir  = "./",
-    n_cases   = 1000,
+    n_cases   = 5,
     prototype = case.Case("../prototype/job.slurm"))
 batch.cases_dir_local = "./cases"
 batch.out_dir_local = "./export"
 verbose = True
 stats_only = False
-detect_cases_to_fix = True
+detect_cases_to_fix = False
 
 ##########
 
@@ -81,13 +81,13 @@ if cases_to_run:
         print("Generating case " + batch.caseID(i))
 
         # Time parameters
-        batch.cases[i].start_time = dt.datetime(2000, 1, 1, 10, 0)
-        batch.cases[i].end_time = dt.datetime(2000, 1, 1, 14, 0)
-        batch.cases[i].timestep = 2
+        batch.cases[i].start_time = dt.datetime(2000, 1, 1, 8, 0)
+        batch.cases[i].end_time = dt.datetime(2000, 1, 4, 1, 0)
+        batch.cases[i].timestep = 15
 
         # Landscape
         batch.cases[i].lcp.description = "Randomly-generated planar terrain"
-        batch.cases[i].lcp.latitude = 0.0
+        batch.cases[i].lcp.latitude = np.int16(0)
         batch.cases[i].lcp.utm_west = 0.0
         batch.cases[i].lcp.utm_east = shape[0] * batch.cases[i].lcp.res_x
         batch.cases[i].lcp.utm_south = 0.0
@@ -157,7 +157,7 @@ if cases_to_run:
             entry['precipitation' ] = 0.0
             entry['wind_speed'    ] = wind_speed
             entry['wind_direction'] = wind_direction
-            entry['cloud_cover'   ] = 100
+            entry['cloud_cover'   ] = 25
             batch.cases[i].weather.data = batch.cases[i].weather.data.append(entry, ignore_index=True)
         
         # Moisture
