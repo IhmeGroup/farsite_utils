@@ -1,5 +1,7 @@
 """This module contains utilities for managing FARSITE cases."""
 
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import os
 import subprocess
 import warnings
@@ -14,6 +16,7 @@ import numpy as np
 from collections import Counter
 import matplotlib.pyplot as plt
 import matplotlib.font_manager
+from matplotlib import animation
 
 from . import landscape
 from . import raws
@@ -608,7 +611,7 @@ class Case:
         self.__convertAndMergePerimeters()
     
 
-    def __plotPerimeters(self, ax, perimeters):
+    def __plotPerimeters(self, ax, perimeters, color='k', linewidth=1):
         """Add perimeters to plot."""
         if type(perimeters) == int:
             steps_out = np.round(np.linspace(0, self.burnDuration()-1, perimeters)).astype(int)
@@ -629,7 +632,7 @@ class Case:
                 x, y = poly.exterior.xy
                 x_scaled = np.array(x) / 1000.0
                 y_scaled = np.array(y) / 1000.0
-                ax.plot(x_scaled, y_scaled, color='k', linewidth=1)
+                ax.plot(x_scaled, y_scaled, color=color, linewidth=linewidth)
     
 
     def renderOutput(self, filename, perimeters=5):
@@ -650,17 +653,52 @@ class Case:
         im3 = axs[1,0].imshow(self.lcp.layers['fuel'].data, extent=extent)
         plt.colorbar(im3, ax=axs[1,0], label="Fuel Model")
 
-        im4 = axs[1,1].imshow(self.spread_rate.data, extent=extent)
+        im4 = axs[1,1].imshow(self.spread_rate.data / 60, extent=extent)
         plt.colorbar(im4, ax=axs[1,1], label="Spread Rate (km/h)")
 
         for ax in axs.reshape(-1):
             self.__plotPerimeters(ax, perimeters)
-            ax.set_xlabel("y (km)")
-            ax.set_ylabel("x (km)")
+            ax.set_xlabel("x (km)")
+            ax.set_ylabel("y (km)")
         
         fig.tight_layout()
         fig.savefig(filename, bbox_inches='tight', dpi=300)
         plt.close()
+    
+    
+    def animate(self, filename, duration=10):
+        """Create animation of fire spread."""
+
+        fig, ax = plt.subplots()
+        extent = (
+            self.lcp.utm_west  / 1000.0,
+            self.lcp.utm_east  / 1000.0,
+            self.lcp.utm_south / 1000.0,
+            self.lcp.utm_north / 1000.0)
+        
+        time_series = self.getOutputTimes()
+        t_strings = [time.strftime("%Y-%m-%d %H:%M:%S") for time in time_series]
+        im = plt.imshow(self.arrival_time.data, extent=extent)
+        plt.colorbar(im, ax=ax, label="Arrival Time (min)")
+        
+        def updateFigure(i):
+            ax.clear()
+            plt.imshow(self.arrival_time.data, extent=extent)
+            self.__plotPerimeters(ax, perimeters=[i], color='r', linewidth=2)
+            ax.text(
+                0.01, 0.01,
+                time_series[i].strftime("%Y-%m-%d %H:%M:%S"),
+                horizontalalignment='left',
+                verticalalignment='bottom',
+                transform=ax.transAxes)
+            ax.set_xlabel("x (km)")
+            ax.set_ylabel("y (km)")
+
+        anim = animation.FuncAnimation(fig, func=updateFigure, frames=self.burnDuration(), interval=50, repeat=False)
+        writer = animation.FFMpegWriter(fps=int(self.burnDuration()/duration), bitrate=5000)
+        anim.save(filename, writer=writer)
+        # plt.show()
+
     
 
     def __burnMap(self, perimeter_poly):
