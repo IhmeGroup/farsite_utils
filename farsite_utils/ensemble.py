@@ -300,12 +300,12 @@ class Ensemble:
             burn_radius,
             "burn_radius",
             "Burned Area Equivalent Circle Radius",
-            bins=np.linspace(0, burn_radius.dropna().to_numpy().max()))
+            bins=np.linspace(0, burn_radius.dropna(axis=1).to_numpy().max()))
         self.__computeAndPlotHistogram(
             front_speed,
             "front_speed",
             "Effective Front Speed",
-            bins=np.linspace(0, front_speed.dropna().to_numpy().max()))
+            bins=np.linspace(0, front_speed.dropna(axis=1).to_numpy().max()))
 
 
 def main():
