@@ -563,13 +563,6 @@ class Case:
             self.name + "_" + name)
     
 
-    def __linestringToPolygon(self, geom):
-        coords = geometry.mapping(geom)['coordinates']
-        lons = [x[0] for x in coords]
-        lats = [x[1] for x in coords]
-        return geometry.Polygon(zip(lons, lats))
-    
-
     def __convertAndMergePerimeters(self):
         """Convert LineString perimeters to Polygon and MultiPolygon objects."""
         self.perimeters_merged = self.perimeters.copy()
@@ -587,9 +580,9 @@ class Case:
                 self.perimeters_merged.iat[-1, -1] = unary_union(polys)
                 polys = []
                 elapsed_minutes = self.perimeters['Elapsed_Mi'][i]
-
+            
             # Add current polygon to list
-            poly = self.__linestringToPolygon(self.perimeters.geometry[i])
+            poly = geometry.Polygon(self.perimeters.geometry[i])
             if not poly.is_valid:
                 poly = poly.buffer(0)
             polys.append(poly)
