@@ -2,4 +2,4 @@ geopandas
 matplotlib
 numpy
 pandas
-shapely
+shapely==1.8

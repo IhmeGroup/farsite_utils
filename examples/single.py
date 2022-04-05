@@ -35,7 +35,7 @@ def detectFixes(batch, missing_cases):
             cases_to_post.append(case_id)
     return (cases_to_run, cases_to_post)
 
-seed = 1*42
+seed = 2*42
 np.random.seed(seed)
 cases_to_run = []
 cases_to_post = []
@@ -45,7 +45,7 @@ prototype = case.Case("../prototype/job.slurm")
 batch = ensemble.Ensemble(
     name      = "single",
     root_dir  = "./",
-    n_cases   = 5,
+    n_cases   = 1000,
     prototype = case.Case("../prototype/job.slurm"))
 batch.cases_dir_local = "./cases"
 batch.out_dir_local = "./export"

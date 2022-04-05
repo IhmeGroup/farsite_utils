@@ -593,7 +593,7 @@ class Case:
             if not poly.is_valid:
                 poly = poly.buffer(0)
             polys.append(poly)
-        
+
         # Merge remaining polygons and write to merged object
         self.perimeters_merged = self.perimeters_merged.append(
             self.perimeters.loc[i],
