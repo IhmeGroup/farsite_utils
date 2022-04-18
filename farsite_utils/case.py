@@ -836,6 +836,13 @@ class Case:
             np.save(prefix + "_burn.npy", self.burn)
         else:
             raise RuntimeError("Burn maps have not yet been computed -- run Case.computeBurnMaps()")
+    
+
+    def exportProfilingData(self):
+        """Export code profiling data."""
+        profiling_data = pd.DataFrame()
+        profiling_data['wtime'] = self.step_wtimes
+        profiling_data.to_csv(os.path.join(self.root_dir, self.out_dir_local, "profiling_data.csv"))
 
 
 def main():
