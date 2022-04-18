@@ -124,6 +124,7 @@ class Case:
         self.perimeters_merged = gpd.GeoDataFrame()
         self.burn = None
         self.verbose = False
+        self.step_wtimes = []
 
         if jobfile_name:
             self.read(jobfile_name)
@@ -611,6 +612,14 @@ class Case:
         self.__convertAndMergePerimeters()
     
 
+    def readProfilingData(self):
+        self.step_wtimes = []
+        with open(os.path.join(self.root_dir, self.logFile()), "r") as file:
+            for line in file:
+                if "Step wall time:" in line:
+                    self.step_wtimes.append(float(line.split()[3]) / 1000.0)
+
+
     def __plotPerimeters(self, ax, perimeters, color='k', linewidth=1):
         """Add perimeters to plot."""
         if type(perimeters) == int:
@@ -827,6 +836,13 @@ class Case:
             np.save(prefix + "_burn.npy", self.burn)
         else:
             raise RuntimeError("Burn maps have not yet been computed -- run Case.computeBurnMaps()")
+    
+
+    def exportProfilingData(self):
+        """Export code profiling data."""
+        profiling_data = pd.DataFrame()
+        profiling_data['wtime'] = self.step_wtimes
+        profiling_data.to_csv(os.path.join(self.root_dir, self.out_dir_local, "profiling_data.csv"))
 
 
 def main():

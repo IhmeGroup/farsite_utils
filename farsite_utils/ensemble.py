@@ -306,6 +306,28 @@ class Ensemble:
             "front_speed",
             "Effective Front Speed",
             bins=np.linspace(0, front_speed.dropna(axis=1).to_numpy().max()))
+    
+
+    def exportProfilingData(self):
+
+        # Get profiling data for each case
+        step_wtimes = []
+        for i, case in enumerate(self.cases):
+            print("Gathering profiling data: case " + self.caseID(i))
+
+            try:
+                case.readProfilingData()
+            except FileNotFoundError:
+                continue
+
+            step_wtimes += case.step_wtimes
+        
+        profiling_data = pd.DataFrame()
+        profiling_data['wtime'] = step_wtimes
+        profiling_data.to_csv(os.path.join(self.root_dir, self.out_dir_local, "profiling_data.csv"))
+
+        import code; code.interact(local=locals())
+        
 
 
 def main():
