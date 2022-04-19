@@ -497,6 +497,9 @@ class Case:
 
     def logFile(self):
         """Find log file, if it exists."""
+        if self.job_id is None:
+            raise RuntimeError("Job ID is None -- cannot attempt to find log file")
+        
         files = os.listdir(self.root_dir)
         for file in files:
             if "{0:d}.out".format(self.job_id) in file:
