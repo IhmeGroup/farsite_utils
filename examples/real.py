@@ -137,7 +137,7 @@ if cases_to_run:
         # Time parameters
         batch.cases[i].start_time = dt.datetime(2000, 1, 1, 8, 0)
         batch.cases[i].end_time = dt.datetime(2000, 1, 4, 8, 0)
-        batch.cases[i].timestep = 7
+        batch.cases[i].timestep = 15
 
         # Select random window
         valid = False
@@ -262,15 +262,19 @@ if cases_to_run:
     batch.run(cases_to_run)
 
 # Read additional cases that need to be post-processed
-print("Reading cases to be post-processed...")
-for case_id in cases_to_post:
-    batch.cases[case_id] = case.Case(
-        os.path.join(
-            batch.cases[case_id].root_dir,
-            batch.cases[case_id].jobfile_name_local))
-    batch.cases[case_id].detectJobID()
-print("Post-processing cases...")
-cases_not_done = batch.postProcess(cases_to_run + cases_to_post, attempts=50, pause_time=60)
+if cases_to_post:
+    print("Reading cases to be post-processed...")
+    for case_id in cases_to_post:
+        batch.cases[case_id] = case.Case(
+            os.path.join(
+                batch.cases[case_id].root_dir,
+                batch.cases[case_id].jobfile_name_local))
+        batch.cases[case_id].detectJobID()
+if (cases_to_run + cases_to_post):
+    print("Post-processing cases...")
+    cases_not_done = batch.postProcess(cases_to_run + cases_to_post, attempts=50, pause_time=60)
+else:
+    cases_not_done = []
 if not cases_not_done:
     print("Computing statistics...")
     batch.computeStatistics()

@@ -15,22 +15,30 @@ def missingCases(batch, out_dir):
     if not os.path.exists(out_dir):
         return [i for i in range(batch.size)]
 
-    file_counts = np.zeros(batch.size, dtype=int)
-    for file in os.listdir(out_dir):
-        if not os.path.splitext(file)[-1] == '.npy':
-            continue
-        case_id_number = int(os.path.split(file)[-1].split("_")[1])
-        file_counts[case_id_number] += 1
-
     present_cases = []
     for i in range(batch.size):
-        if file_counts[i] == 16:
-            present_cases.append(i)
+        case_id = batch.caseID(i)
+        for file in os.listdir(out_dir):
+            if case_id in file:
+                present_cases.append(i)
+                break
     return [i for i in range(batch.size) if i not in present_cases]
 
-seed = 15*42
+def detectFixes(batch, missing_cases):
+    cases_to_run = []
+    cases_to_post = []
+    for case_id in missing_cases:
+        batch.cases[case_id].detectJobID()
+        if batch.cases[case_id].ignitionFailed():
+            cases_to_run.append(case_id)
+        elif batch.cases[case_id].isDone():
+            cases_to_post.append(case_id)
+    return (cases_to_run, cases_to_post)
+
+seed = 0*42
 np.random.seed(seed)
 cases_to_run = []
+cases_to_post = []
 # fuels = case.FUELS_40
 fuels = case.FUELS_40_BURNABLE
 print("Loading prototype...")
@@ -38,7 +46,7 @@ prototype = case.Case("../prototype/job.slurm")
 batch = ensemble.Ensemble(
     name      = "basic",
     root_dir  = "./",
-    n_cases   = 5,
+    n_cases   = 1000,
     prototype = case.Case("../prototype/job.slurm"))
 batch.cases_dir_local = "./cases"
 batch.out_dir_local = "./export"
