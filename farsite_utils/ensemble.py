@@ -326,8 +326,26 @@ class Ensemble:
         profiling_data['wtime'] = step_wtimes
         profiling_data.to_csv(os.path.join(self.root_dir, self.out_dir_local, "profiling_data.csv"))
 
-        import code; code.interact(local=locals())
-        
+        mu = np.mean(profiling_data['wtime'])
+        median = np.median(profiling_data['wtime'])
+        sigma = np.std(profiling_data['wtime'])
+
+        fig, ax = plt.subplots()
+        ax.hist(profiling_data['wtime']*1000.0, bins=50)
+        ax.text(
+            0.9, 0.9,
+            "$\mu = {0:.1f}$\nmedian$ = {1:.1f}$\n$\sigma = {2:.1f}$".format(mu*1000, median*1000, sigma*1000),
+            horizontalalignment="right",
+            verticalalignment="top",
+            transform=ax.transAxes)
+        ax.set_xlabel("Step Wall Time (ms)")
+        ax.set_ylabel("Occurences")
+
+        plt.tight_layout()
+        plt.savefig(
+            os.path.join(self.root_dir, self.out_dir_local, "profiling_data.png"),
+            bbox_inches='tight',
+            dpi=300)
 
 
 def main():
