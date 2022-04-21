@@ -14,14 +14,18 @@ from farsite_utils import raws
 def missingCases(batch, out_dir):
     if not os.path.exists(out_dir):
         return [i for i in range(batch.size)]
+    
+    file_counts = np.zeros(batch.size, dtype=int)
+    for file in os.listdir(out_dir):
+        if not os.path.splitext(file)[-1] == '.npy':
+            continue
+        case_id_number = int(os.path.split(file)[-1].split("_")[1])
+        file_counts[case_id_number] += 1
 
     present_cases = []
     for i in range(batch.size):
-        case_id = batch.caseID(i)
-        for file in os.listdir(out_dir):
-            if case_id in file:
-                present_cases.append(i)
-                break
+        if file_counts[i] == 16:
+            present_cases.append(i)
     return [i for i in range(batch.size) if i not in present_cases]
 
 def detectFixes(batch, missing_cases):
@@ -200,15 +204,19 @@ if cases_to_run:
     batch.run(cases_to_run)
 
 # Read additional cases that need to be post-processed
-print("Reading cases to be post-processed...")
-for case_id in cases_to_post:
-    batch.cases[case_id] = case.Case(
-        os.path.join(
-            batch.cases[case_id].root_dir,
-            batch.cases[case_id].jobfile_name_local))
-    batch.cases[case_id].detectJobID()
-print("Post-processing cases...")
-cases_not_done = batch.postProcess(cases_to_run + cases_to_post, attempts=50, pause_time=60)
+if cases_to_post:
+    print("Reading cases to be post-processed...")
+    for case_id in cases_to_post:
+        batch.cases[case_id] = case.Case(
+            os.path.join(
+                batch.cases[case_id].root_dir,
+                batch.cases[case_id].jobfile_name_local))
+        batch.cases[case_id].detectJobID()
+if (cases_to_run + cases_to_post):
+    print("Post-processing cases...")
+    cases_not_done = batch.postProcess(cases_to_run + cases_to_post, attempts=50, pause_time=60)
+else:
+    cases_not_done = []
 if not cases_not_done:
     print("Computing statistics...")
     batch.computeStatistics()
