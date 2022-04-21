@@ -15,13 +15,17 @@ def missingCases(batch, out_dir):
     if not os.path.exists(out_dir):
         return [i for i in range(batch.size)]
 
+    file_counts = np.zeros(batch.size, dtype=int)
+    for file in os.listdir(out_dir):
+        if not os.path.splitext(file)[-1] == '.npy':
+            continue
+        case_id_number = int(os.path.split(file)[-1].split("_")[1])
+        file_counts[case_id_number] += 1
+
     present_cases = []
     for i in range(batch.size):
-        case_id = batch.caseID(i)
-        for file in os.listdir(out_dir):
-            if case_id in file:
-                present_cases.append(i)
-                break
+        if file_counts[i] == 16:
+            present_cases.append(i)
     return [i for i in range(batch.size) if i not in present_cases]
 
 def detectFixes(batch, missing_cases):
