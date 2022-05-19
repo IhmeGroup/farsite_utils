@@ -211,3 +211,26 @@ def setBorder(field, thickness, value):
     field_new[:, 0:thickness] = value
     field_new[:, -thickness:] = value
     return field_new
+
+
+def setLine(field, x0, y0, x1, y1, width, value):
+    """Set line through field with given width to given value."""
+
+    x_vec = np.arange(field.shape[0])
+    y_vec = np.arange(field.shape[1])
+
+    x = np.array([x1-x0, y1-y0])
+
+    field_new = field.copy()
+    for i, x in enumerate(x_vec):
+        for j, y in enumerate(y_vec):
+            dx = np.array([x-x0, y-y0]) # Vector from point 0 to query point
+            dx1 = np.dot(dx, x) / np.dot(x, x) * x # Projection of dx onto x
+            dx2 = x - dx1 # Rejection of dx onto x
+            dx3 = np.array([x-x1, y-y1]) # Vector from point 1 to query point
+            in_width = np.linalg.norm(dx1) <= width/2
+            in_length = (np.dot(dx2, x) >= 0) and (np.linalg.norm(dx2) <= np.linalg.norm(x))
+            in_cap = (np.linalg.norm(dx) <= width/2) or (np.linalg.norm(dx3) <= width/2)
+            if (in_width and in_length) or in_cap:
+                field_new[i,j] = value
+    return field_new

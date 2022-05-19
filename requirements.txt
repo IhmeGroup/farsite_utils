@@ -2,5 +2,5 @@ geopandas
 matplotlib
 numpy
 pandas
-shapely==1.8
+shapely>=1.8
 rasterio
