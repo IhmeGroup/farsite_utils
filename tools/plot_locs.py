@@ -28,11 +28,13 @@ plt.rc('ytick', labelsize=_SMALL_SIZE)    # fontsize of the tick labels
 plt.rc('legend', fontsize=_XSMALL_SIZE)   # legend fontsize
 plt.rc('figure', titlesize=_BIGGER_SIZE)  # fontsize of the figure title
 
-
-data_dir = "/home/ihme/mbonanni/wildfire_ml/data_real"
+home_dir = "/usr/workspace/bonanni1/wildfire_ml/real"
+data_dir = "../data_real"
 map_file = "map.npy"
 map_scale = 0.1
-locs_file = "locs.csv"
+locs_file = "real_00/locs_1.csv"
+
+os.chdir(home_dir)
 
 if os.path.exists(map_file):
     print("Reading data...")
