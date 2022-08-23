@@ -166,8 +166,10 @@ def main():
         # print("Case: " + case_id + " - fuel: {0:.2f}".format(data.lcp.layers['fuel'].data[0,0]))
 
         windVec = np.array([
-            -data.weather.data['wind_speed'][0] * np.cos(-np.radians(data.weather.data['wind_direction'][0]) + np.pi/2),
-            -data.weather.data['wind_speed'][0] * np.sin(-np.radians(data.weather.data['wind_direction'][0]) + np.pi/2)])
+            -data.weather.data['wind_speed'][0] * np.cos(
+                -np.radians(data.weather.data['wind_direction'][0]) + np.pi/2),
+            -data.weather.data['wind_speed'][0] * np.sin(
+                -np.radians(data.weather.data['wind_direction'][0]) + np.pi/2)])
         windMag = np.linalg.norm(windVec)
         unitWindVec = windVec / windMag
         northVec = np.array([0, 1])
@@ -175,8 +177,14 @@ def main():
         lw_arrow = 50.0
         lw_arc = 2.25
         scale = 1000
-        axs[i,2].arrow(origin[0], origin[1], northVec[0]*scale, northVec[1]*scale, color='w', capstyle='round', width=lw_arrow, zorder=1001)
-        axs[i,2].arrow(origin[0], origin[1], unitWindVec[0]*scale, unitWindVec[1]*scale, color='r', capstyle='round', width=lw_arrow, zorder=1002)
+        axs[i,2].arrow(
+            origin[0], origin[1],
+            northVec[0]*scale, northVec[1]*scale,
+            color='w', capstyle='round', width=lw_arrow, zorder=1001)
+        axs[i,2].arrow(
+            origin[0], origin[1],
+            unitWindVec[0]*scale, unitWindVec[1]*scale,
+            color='r', capstyle='round', width=lw_arrow, zorder=1002)
         theta2 = np.degrees(np.arctan2(windVec[1], windVec[0]))
         if theta2 < 0:
             theta2 = theta2 + 360.0
