@@ -184,8 +184,10 @@ def main():
         # print("Case: " + case_id + " - fuel: {0:.2f}".format(data.lcp.layers['fuel'].data[0,0]))
 
         windVec = np.array([
-            -data.weather.data['wind_speed'][0] * np.cos(-np.radians(data.weather.data['wind_direction'][0]) + np.pi/2),
-            -data.weather.data['wind_speed'][0] * np.sin(-np.radians(data.weather.data['wind_direction'][0]) + np.pi/2)])
+            -data.weather.data['wind_speed'][0] * np.cos(
+                -np.radians(data.weather.data['wind_direction'][0]) + np.pi/2),
+            -data.weather.data['wind_speed'][0] * np.sin(
+                -np.radians(data.weather.data['wind_direction'][0]) + np.pi/2)])
         windMag = np.linalg.norm(windVec)
         unitWindVec = windVec / windMag
         northVec = np.array([0, 1])
