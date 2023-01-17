@@ -26,6 +26,9 @@ plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
 plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
 plt.rc('figure', titlesize=BIG_SIZE)     # fontsize of the figure title
 
+TICKS = [0, 1000, 2000, 3000]
+TICKLABELS = ["0", "1", "2", "3"]
+
 def parse_metadata(file):
     metadata = dict()
     with open(file,'r') as f:
@@ -100,19 +103,30 @@ def main():
             axs[i,0].contour(X, Y, data.arrival_time.data, contour_times, colors='k')
         if (i == 0):
             axs[i,0].set_title("Arrival time (min)")
+        axs[i,0].set_xticks(TICKS)
+        axs[i,0].set_yticks(TICKS)
+        axs[i,0].tick_params(
+            axis='both',
+            which='both',
+            bottom=True,
+            top=False,
+            left=True,
+            right=False,
+            labelbottom=False,
+            labelleft=False)
+#         if (i == n_cases-1):
+#             axs[i,0].set_xlabel("4000m")
+#             axs[i,0].set_ylabel("4000m")
         if (i == n_cases-1):
-            axs[i,0].set_xlabel("x (m)")
-            axs[i,0].set_ylabel("y (m)")
-        else:
             axs[i,0].tick_params(
-                axis='both',
-                which='both',
-                bottom=False,
-                top=False,
-                left=False,
-                right=False,
-                labelbottom=False,
-                labelleft=False)
+                labelbottom=True,
+                labelleft=True)
+            axs[i,0].set_xticklabels(TICKLABELS)
+            axs[i,0].set_yticklabels(TICKLABELS)
+#             plt.setp(axs[i,0].get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+#             plt.setp(axs[i,0].get_yticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+            axs[i,0].set_xlabel("$x$ (km)")
+            axs[i,0].set_ylabel("$y$ (km)")
 
         cmap = 'viridis'
         im = axs[i,1].imshow(data.lcp.layers['fuel'].data, extent=(0,x[-1],0,y[-1]), cmap=cmap)
@@ -128,12 +142,14 @@ def main():
             axs[i,1].contour(X, Y, data.arrival_time.data, contour_times, colors='k')
         if (i == 0):
             axs[i,1].set_title("Fuel")
+        axs[i,1].set_xticks(TICKS)
+        axs[i,1].set_yticks(TICKS)
         axs[i,1].tick_params(
             axis='both',
             which='both',
-            bottom=False,
+            bottom=True,
             top=False,
-            left=False,
+            left=True,
             right=False,
             labelbottom=False,
             labelleft=False)
@@ -151,12 +167,14 @@ def main():
             axs[i,2].contour(X, Y, data.arrival_time.data, contour_times, colors='k')
         if (i == 0):
             axs[i,2].set_title("Elevation (m)")
+        axs[i,2].set_xticks(TICKS)
+        axs[i,2].set_yticks(TICKS)
         axs[i,2].tick_params(
             axis='both',
             which='both',
-            bottom=False,
+            bottom=True,
             top=False,
-            left=False,
+            left=True,
             right=False,
             labelbottom=False,
             labelleft=False)
@@ -171,10 +189,30 @@ def main():
         windMag = np.linalg.norm(windVec)
         unitWindVec = windVec / windMag
         northVec = np.array([0, 1])
-        origin = np.array([x[-1]/2, y[-1]/2])
-        lw_arrow = 50.0
-        lw_arc = 2.25
-        scale = 1000
+#         origin = np.array([x[-1]/2, y[-1]/2])
+
+        if (i == 0):
+            origin = np.array([800, y[-1]/4])
+            N_color = 'w'
+            speed_text = "{:0.1f} km/h".format(windMag)
+            speed_offset = [1250, 0]
+        elif (i == 1):
+            origin = np.array([x[-1]/8, y[-1]/8])
+            N_color = 'w'
+            speed_text = "{:0.1f} km/h".format(windMag)
+            speed_offset = [900, 100]
+        else:
+            origin = np.array([x[-1]/8, y[-1]/4])
+            N_color = 'w'
+            speed_text = "{:0.1f} km/h".format(windMag)
+            speed_offset = [500, -50]
+
+#         lw_arrow = 50.0
+        lw_arrow = 30.0
+#         lw_arc = 2.25
+        lw_arc = 2.0
+#         scale = 1000
+        scale = 500
         axs[i,2].arrow(origin[0], origin[1], northVec[0]*scale, northVec[1]*scale, color='w', capstyle='round', width=lw_arrow, zorder=1001)
         axs[i,2].arrow(origin[0], origin[1], unitWindVec[0]*scale, unitWindVec[1]*scale, color='r', capstyle='round', width=lw_arrow, zorder=1002)
         theta2 = np.degrees(np.arctan2(windVec[1], windVec[0]))
@@ -182,20 +220,6 @@ def main():
             theta2 = theta2 + 360.0
         axs[i,2].add_patch(patches.Arc(origin, 0.5*scale, 0.5*scale, angle=0.0,
             theta1=90.0, theta2=theta2, color='r', linewidth=lw_arc, zorder=1000))
-
-        if (i == 0):
-            N_color = 'k'
-            speed_text = "{:0.1f} km/h".format(windMag)
-            speed_offset = [500, 0]
-        elif (i == 1):
-            N_color = 'w'
-            speed_text = "{:0.1f}\nkm/h".format(windMag)
-            speed_offset = [100, 100]
-        else:
-            N_color = 'w'
-            speed_text = "{:0.1f} km/h".format(windMag)
-            speed_offset = [-300, 0]
-
         axs[i,2].text(origin[0], origin[1] + (northVec[1] + 0.2)*scale,
             "N", color=N_color, ha='center', va='bottom', zorder=1003)
         axs[i,2].text(
@@ -204,9 +228,9 @@ def main():
             speed_text,
             color='w', ha='center', va='center', zorder=1004)
     
-    # axs[0,1].set_ylabel("\\emph{single fuel}")
-    # axs[1,1].set_ylabel("\\emph{multiple fuel}")
-    # axs[2,1].set_ylabel("\\emph{California}")
+    # axs[0,0].set_ylabel("\\emph{single fuel}")
+    # axs[1,0].set_ylabel("\\emph{multiple fuel}")
+    # axs[2,0].set_ylabel("\\emph{California}")
 
     plt.tight_layout()
     plt.subplots_adjust(wspace=0.0)
