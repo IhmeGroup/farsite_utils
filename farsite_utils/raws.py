@@ -109,11 +109,11 @@ class RAWS:
         for i in range(self.count):
             line = file.readline()
             entry = self.__parseBodyLine(line)
-            self._data = self._data.append(entry, ignore_index=True)
+            self.data = self.data.append(entry, ignore_index=True)
 
 
     def read(self, filename):
-        self._data = self._data[0:0]
+        self.data = self.data[0:0]
         with open(filename, "r") as file:
             self.__parseHeader(file)
             self.__parseBody(file)
@@ -142,7 +142,7 @@ class RAWS:
 
     def __writeBody(self, file):
         for i in range(self.count):
-            self.__writeBodyLine(file, self._data.loc[i])
+            self.__writeBodyLine(file, self.data.loc[i])
     
     
     def write(self, filename):
@@ -153,16 +153,19 @@ class RAWS:
 
     def writeWindNPY(self, prefix, shape, query_times=None):
         if not query_times:
-            query_times = [self._data.loc[0, 'time']]
+            query_times = [self.data.loc[0, 'time']]
         
         # Convert datetimes to elapsed seconds
-        epoch = self._data.loc[0, 'time']
+        epoch = self.data.loc[0, 'time']
         query_times_secs = [(time - epoch).total_seconds() for time in query_times]
-        raws_times_secs = [(time.to_pydatetime() - epoch).total_seconds() for time in self._data['time']]
+        data_times_secs = [(time.to_pydatetime() - epoch).total_seconds() for time in self.data['time']]
+
+        print("RAWS.writeWindNPY")
+        import code; code.interact(local=locals())
 
         # Interpolate data at query times
-        wind_speed     = np.interp(query_times_secs, raws_times_secs, list(self._data['wind_speed']))
-        wind_direction = np.interp(query_times_secs, raws_times_secs, list(self._data['wind_direction']))
+        wind_speed     = np.interp(query_times_secs, data_times_secs, list(self.data['wind_speed']))
+        wind_direction = np.interp(query_times_secs, data_times_secs, list(self.data['wind_direction']))
 
         # Compute components from speed and direction
         wind_east  = np.zeros([len(query_times), shape[0], shape[1]])

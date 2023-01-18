@@ -1,3 +1,5 @@
+"""Utilities for reading and writing ATM files and their associated wind files."""
+
 import os
 import datetime as dt
 import numpy as np
@@ -9,8 +11,10 @@ from . import ascii_data
 _DEFAULT_YEAR = 2000
 _DATA_COLS = [
     'time',
-    'wind_speed',
-    'wind_direction']
+    'wind_speed_file',
+    'wind_speed_data',
+    'wind_direction_file',
+    'wind_direction_data']
 
 class ATM:
     def __init__(self, filename=None):
@@ -54,8 +58,10 @@ class ATM:
             int(vals[1]),
             int("{0:04d}".format(int(vals[2]))[0:2]),
             int("{0:04d}".format(int(vals[2]))[2:4]))
-        entry['wind_speed'] =     ascii_data.ASCIIData(os.path.join(self.root_dir, vals[3]))
-        entry['wind_direction'] = ascii_data.ASCIIData(os.path.join(self.root_dir, vals[4]))
+        entry['wind_speed_file'] =     vals[3]
+        entry['wind_direction_file'] = vals[4]
+        entry['wind_speed_data'] =     ascii_data.ASCIIData(os.path.join(self.root_dir, vals[3]))
+        entry['wind_direction_data'] = ascii_data.ASCIIData(os.path.join(self.root_dir, vals[4]))
         return entry
     
 
@@ -70,3 +76,68 @@ class ATM:
         self.data = self.data[0:0]
         with open(filename, "r") as file:
             self.__parseBody(file)
+    
+
+    def __writeBodyLine(self, file, entry):
+        file.write("{0} {1} {2}{3:02d} {4} {5}\n".format(
+            entry['time'].month,
+            entry['time'].day,
+            entry['time'].hour,
+            entry['time'].minute,
+            entry['wind_speed_file'],
+            entry['wind_direction_file']))
+    
+
+    def __writeBody(self, file):
+        for i in range(self.count):
+            self.__writeBodyLine(file, self.data.loc[i])
+    
+
+    def __writeFilesLine(self, root_dir, entry):
+        entry['wind_speed_data'    ].write(os.path.join(root_dir, entry['wind_speed_file'    ]))
+        entry['wind_direction_data'].write(os.path.join(root_dir, entry['wind_direction_file']))
+    
+
+    def __writeFiles(self, root_dir):
+        for i in range(self.count):
+            self.__writeFilesLine(root_dir, self.data.loc[i])
+    
+    
+    def write(self, filename):
+        with open(filename, "w") as file:
+            self.__writeBody(file)
+        self.__writeFiles(os.path.split(filename)[0])
+    
+
+    def writeNPY(self, prefix, shape, query_times=None):
+        if not query_times:
+            query_times = [self.data.loc[0, 'time']]
+        
+        # Convert datetimes to elapsed seconds
+        epoch = self.data.loc[0, 'time']
+        query_times_secs = [(time - epoch).total_seconds() for time in query_times]
+        data_times_secs = [(time.to_pydatetime() - epoch).total_seconds() for time in self.data['time']]
+
+        print("ATM.writeNPY")
+        import code; code.interact(local=locals())
+
+        # Compute components from speed and direction
+        wind_east  = np.zeros([len(query_times), shape[0], shape[1]])
+        wind_north = np.zeros([len(query_times), shape[0], shape[1]])
+        for i in range(len(query_times)):
+            wind_east[i,:]  = -wind_speed[i] * np.cos(-np.radians(wind_direction[i]) + np.pi/2)
+            wind_north[i,:] = -wind_speed[i] * np.sin(-np.radians(wind_direction[i]) + np.pi/2)
+        
+        # Write
+        np.save(prefix + "_wind_east.npy",  wind_east)
+        np.save(prefix + "_wind_north.npy", wind_north)
+
+        raise NotImplementedError
+
+
+def main():
+    pass
+
+
+if __name__ == "__main__":
+    main()

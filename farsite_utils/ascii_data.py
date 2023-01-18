@@ -1,6 +1,9 @@
 """Class for managing standard GIS ascii files"""
 
+import os
 import numpy as np
+
+_PRECISION = 8
 
 class ASCIIData:
     def __init__(self, filename=None):
@@ -29,40 +32,48 @@ class ASCIIData:
         return line.strip().split()
     
 
-    def __readHeader(self, filename):
-        with open(filename, "r") as file:
-            self.nrows = int(self.__parseHeaderLine(file.readline())[1])
-            self.ncols = int(self.__parseHeaderLine(file.readline())[1])
-            self.xllcorner = float(self.__parseHeaderLine(file.readline())[1])
-            self.yllcorner = float(self.__parseHeaderLine(file.readline())[1])
-            self.cell_size = float(self.__parseHeaderLine(file.readline())[1])
-            self.nodata_value = float(self.__parseHeaderLine(file.readline())[1])
+    def __readHeader(self, file):
+        self.ncols = int(self.__parseHeaderLine(file.readline())[1])
+        self.nrows = int(self.__parseHeaderLine(file.readline())[1])
+        self.xllcorner = float(self.__parseHeaderLine(file.readline())[1])
+        self.yllcorner = float(self.__parseHeaderLine(file.readline())[1])
+        self.cell_size = float(self.__parseHeaderLine(file.readline())[1])
+        self.nodata_value = float(self.__parseHeaderLine(file.readline())[1])
     
 
-    def __readBody(self, filename):
-        self.data = np.loadtxt(filename, skiprows=6, dtype=np.float64)
+    def __readBody(self, file):
+        self.data = np.loadtxt(file, dtype=np.float64)
         self.data = np.ma.masked_where(
             np.isclose(self.data, self.nodata_value),
             self.data)
 
 
     def read(self, filename):
-        self.__readHeader(filename)
-        self.__readBody(filename)
+        with open(filename, "r") as file:
+            self.__readHeader(file)
+            self.__readBody(file)
     
 
-    def __writeHeader(self, filename):
-        raise NotImplementedError
+    def __writeHeader(self, file):
+        file.write("NCOLS: {0}\n".format(self.ncols))
+        file.write("NROWS: {0}\n".format(self.nrows))
+        file.write("XLLCORNER: {0}\n".format(self.xllcorner))
+        file.write("YLLCORNER: {0}\n".format(self.yllcorner))
+        file.write("CELLSIZE: {0}\n".format(self.cell_size))
+        file.write("NODATA_VALUE: {0}\n".format(self.nodata_value))
     
 
-    def __writeBody(self, filename):
-        raise NotImplementedError
+    def __writeBody(self, file):
+        np.savetxt(file, self.data, fmt='%.{0}f'.format(_PRECISION))
     
 
     def write(self, filename):
-        self.__writeHeader(filename)
-        self.__writeBody(filename)
-        raise NotImplementedError
+        root_dir = os.path.split(filename)[0]
+        if not os.path.exists(root_dir):
+            os.makedirs(root_dir)
+        with open(filename, "w") as file:
+            self.__writeHeader(file)
+            self.__writeBody(file)
 
     
     def writeNPY(self, filename):

@@ -263,7 +263,7 @@ class Case:
 
     def __writeInputATM(self, file):
         """Write atm parameters to the input file."""
-        file.write("ATM_FILE: {0}\n".format(self.name+".atm"))
+        file.write("FARSITE_ATM_FILE: {0}\n".format(self.name+".atm"))
     
 
     def __writeInputCrown(self, file):
@@ -369,7 +369,7 @@ class Case:
             self.weather = raws.RAWS(os.path.join(self.root_dir, val))
             self.start_time = self.start_time.replace(year=self.weather.data.at[0, 'time'].year)
             self.end_time = self.end_time.replace(year=self.weather.data.at[0, 'time'].year)
-        elif name == "ATM_FILE":
+        elif name == "FARSITE_ATM_FILE":
             self.atm = atm.ATM(os.path.join(self.root_dir, val))
         elif name == "FOLIAR_MOISTURE_CONTENT":
             self.foliar_moisture_content = int(val)
@@ -841,11 +841,16 @@ class Case:
             os.makedirs(out_dir, exist_ok=True)
 
         self.lcp.writeNPY(prefix)
-        self.weather.writeWindNPY(
-            prefix,
-            (self.lcp.num_north, self.lcp.num_east),
-            self.getOutputTimes())
-        # TODO: SOMETHING WITH ATM WIND HERE
+        if self.atm.count > 0:
+            self.atm.writeNPY(
+                prefix,
+                (self.lcp.num_north, self.lcp.num_east),
+                self.getOutputTimes())
+        else:
+            self.weather.writeWindNPY(
+                prefix,
+                (self.lcp.num_north, self.lcp.num_east),
+                self.getOutputTimes())
         self.writeMoistureNPY(prefix)
 
         if self.burn is not None:
