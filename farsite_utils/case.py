@@ -20,6 +20,7 @@ from matplotlib import animation
 
 from . import landscape
 from . import raws
+from . import atm
 from . import sbatch
 from . import ascii_data
 
@@ -100,6 +101,7 @@ class Case:
         self.fuel_moistures_count = 0
         self.fuel_moistures = pd.DataFrame(columns = _FUEL_MOISTURES_COLS)
         self.weather = raws.RAWS()
+        self.atm = atm.ATM()
         self.foliar_moisture_content = 100
         self.crown_fire_method = CrownFireMethod.FINNEY
         self.number_processors = 1
@@ -259,6 +261,11 @@ class Case:
         file.write("RAWS_FILE: {0}\n".format(self.name+".raws"))
     
 
+    def __writeInputATM(self, file):
+        """Write atm parameters to the input file."""
+        file.write("ATM_FILE: {0}\n".format(self.name+".atm"))
+    
+
     def __writeInputCrown(self, file):
         """Write crown fire parameters to the input file."""
         file.write("FOLIAR_MOISTURE_CONTENT: {0}\n".format(self.foliar_moisture_content))
@@ -362,6 +369,8 @@ class Case:
             self.weather = raws.RAWS(os.path.join(self.root_dir, val))
             self.start_time = self.start_time.replace(year=self.weather.data.at[0, 'time'].year)
             self.end_time = self.end_time.replace(year=self.weather.data.at[0, 'time'].year)
+        elif name == "ATM_FILE":
+            self.atm = atm.ATM(os.path.join(self.root_dir, val))
         elif name == "FOLIAR_MOISTURE_CONTENT":
             self.foliar_moisture_content = int(val)
         elif name == "CROWN_FIRE_METHOD":
@@ -448,6 +457,7 @@ class Case:
         input_file_local = self.name+".input"
         lcp_prefix_local = os.path.join(self.landscape_dir_local, self.name)
         weather_file_local = self.name+".raws"
+        atm_file_local = self.name+".atm"
         ignition_file_local = os.path.join(self.ignition_dir_local, self.name+".shp")
         run_file_local = "run_"+self.name+".txt"
         job_file_local = "job.slurm"
@@ -456,6 +466,7 @@ class Case:
         input_file = os.path.join(self.root_dir, input_file_local)
         lcp_prefix = os.path.join(self.root_dir, lcp_prefix_local)
         weather_file = os.path.join(self.root_dir, weather_file_local)
+        atm_file = os.path.join(self.root_dir, atm_file_local)
         ignition_file = os.path.join(self.root_dir, ignition_file_local)
         run_file = os.path.join(self.root_dir, run_file_local)
         job_file = os.path.join(self.root_dir, job_file_local)
@@ -463,6 +474,7 @@ class Case:
         self.writeInput(input_file)
         self.lcp.write(lcp_prefix)
         self.weather.write(weather_file)
+        self.atm.write(atm_file)
         self.ignition.to_file(ignition_file)
         self.sbatch.runfile_name_local = run_file_local
         self.sbatch.write(job_file)
@@ -833,6 +845,7 @@ class Case:
             prefix,
             (self.lcp.num_north, self.lcp.num_east),
             self.getOutputTimes())
+        # TODO: SOMETHING WITH ATM WIND HERE
         self.writeMoistureNPY(prefix)
 
         if self.burn is not None:

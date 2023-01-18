@@ -26,7 +26,7 @@ class ASCIIData:
     
 
     def __parseHeaderLine(self, line):
-        return line.strip().split(" ")
+        return line.strip().split()
     
 
     def __readHeader(self, filename):
