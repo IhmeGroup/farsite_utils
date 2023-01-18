@@ -8,6 +8,7 @@ from collections import Counter
 
 from . import ascii_data
 
+
 _DEFAULT_YEAR = 2000
 _DATA_COLS = [
     'time',
@@ -15,6 +16,7 @@ _DATA_COLS = [
     'wind_speed_data',
     'wind_direction_file',
     'wind_direction_data']
+
 
 class ATM:
     def __init__(self, filename=None):
@@ -47,6 +49,11 @@ class ATM:
     @property
     def count(self):
         return len(self.data)
+    
+
+    @property
+    def shape(self):
+        return self.data.loc[0, 'wind_speed_data'].shape
     
 
     def __parseBodyLine(self, line):
@@ -109,21 +116,31 @@ class ATM:
         self.__writeFiles(os.path.split(filename)[0])
     
 
-    def writeNPY(self, prefix, shape, query_times=None):
+    def writeNPY(self, prefix, query_times=None):
         if not query_times:
             query_times = [self.data.loc[0, 'time']]
         
+        #TODO: spatial interpolation when wind grid and landscape grid are not matched
+        
         # Convert datetimes to elapsed seconds
-        epoch = self.data.loc[0, 'time']
+        epoch = self.data.loc[0, 'time'].replace(year=query_times[0].year)
         query_times_secs = [(time - epoch).total_seconds() for time in query_times]
-        data_times_secs = [(time.to_pydatetime() - epoch).total_seconds() for time in self.data['time']]
+        data_times_secs = \
+            [(time.replace(year=query_times[0].year).to_pydatetime() - epoch).total_seconds() for time in self.data['time']]
 
-        print("ATM.writeNPY")
-        import code; code.interact(local=locals())
+        wind_npy_shape = [len(query_times), self.shape[0], self.shape[1]]
+
+        # Interpolate data at query times (previous)
+        wind_speed     = np.zeros(wind_npy_shape)
+        wind_direction = np.zeros(wind_npy_shape)
+        for i in range(len(query_times)):
+            i_data = np.argwhere(query_times_secs[i] >= np.array(data_times_secs))[-1][0]
+            wind_speed[i]     = self.data.loc[i_data, 'wind_speed_data'    ].data
+            wind_direction[i] = self.data.loc[i_data, 'wind_direction_data'].data
 
         # Compute components from speed and direction
-        wind_east  = np.zeros([len(query_times), shape[0], shape[1]])
-        wind_north = np.zeros([len(query_times), shape[0], shape[1]])
+        wind_east  = np.zeros(wind_npy_shape)
+        wind_north = np.zeros(wind_npy_shape)
         for i in range(len(query_times)):
             wind_east[i,:]  = -wind_speed[i] * np.cos(-np.radians(wind_direction[i]) + np.pi/2)
             wind_north[i,:] = -wind_speed[i] * np.sin(-np.radians(wind_direction[i]) + np.pi/2)
@@ -132,7 +149,7 @@ class ATM:
         np.save(prefix + "_wind_east.npy",  wind_east)
         np.save(prefix + "_wind_north.npy", wind_north)
 
-        raise NotImplementedError
+        import code; code.interact(local=locals())
 
 
 def main():

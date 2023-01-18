@@ -43,6 +43,7 @@ plt.rc('ytick', labelsize=_SMALL_SIZE)    # fontsize of the tick labels
 plt.rc('legend', fontsize=_XSMALL_SIZE)   # legend fontsize
 plt.rc('figure', titlesize=_BIGGER_SIZE)  # fontsize of the figure title
 
+
 _DEFAULT_YEAR = 2000
 _BURN_PERIODS_COLS = ['start', 'end']
 _FUEL_MOISTURES_COLS = ['model', '1_hour', '10_hour', '100_hour', 'live_herbaceous', 'live_woody']
@@ -844,7 +845,6 @@ class Case:
         if self.atm.count > 0:
             self.atm.writeNPY(
                 prefix,
-                (self.lcp.num_north, self.lcp.num_east),
                 self.getOutputTimes())
         else:
             self.weather.writeWindNPY(

@@ -160,12 +160,17 @@ class RAWS:
         query_times_secs = [(time - epoch).total_seconds() for time in query_times]
         data_times_secs = [(time.to_pydatetime() - epoch).total_seconds() for time in self.data['time']]
 
-        print("RAWS.writeWindNPY")
-        import code; code.interact(local=locals())
+        # Interpolate data at query times (linear)
+        # wind_speed     = np.interp(query_times_secs, data_times_secs, list(self.data['wind_speed']))
+        # wind_direction = np.interp(query_times_secs, data_times_secs, list(self.data['wind_direction']))
 
-        # Interpolate data at query times
-        wind_speed     = np.interp(query_times_secs, data_times_secs, list(self.data['wind_speed']))
-        wind_direction = np.interp(query_times_secs, data_times_secs, list(self.data['wind_direction']))
+        # Interpolate data at query times (previous)
+        wind_speed = np.zeros(len(query_times))
+        wind_direction = np.zeros(len(query_times))
+        for i in range(len(query_times)):
+            i_data = np.argwhere(query_times_secs[i] >= np.array(data_times_secs))[-1][0]
+            wind_speed[i]     = self.data['wind_speed'    ][i_data]
+            wind_direction[i] = self.data['wind_direction'][i_data]
 
         # Compute components from speed and direction
         wind_east  = np.zeros([len(query_times), shape[0], shape[1]])

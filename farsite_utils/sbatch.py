@@ -2,6 +2,7 @@
 
 import os
 import datetime as dt
+import re
 
 
 def strdelta(tdelta):
@@ -63,7 +64,8 @@ class SBatch:
             _Option("-o", "%x.%j.out"),
             _Option("-N", 1),
             _Option("-n", 1),
-            _Option("-t", dt.timedelta(hours=2))]
+            _Option("-t", dt.timedelta(hours=2)),
+            _Option("--partition", "pdebug")]
         self.echoline = ""
         self.exec = []
         self.runfile_name_local = ""
@@ -88,7 +90,7 @@ class SBatch:
         self.options = []
         with open(filename, "r") as file:
             for line in file:
-                split = line.strip().split(" ")
+                split = re.split(" |=", line.strip())
                 if not line.strip():
                     continue
                 elif line[0:2] == "#!":
