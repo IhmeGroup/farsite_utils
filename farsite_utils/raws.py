@@ -126,7 +126,7 @@ class RAWS:
     
 
     def __writeBodyLine(self, file, entry):
-        file.write("{0} {1} {2} {3}{4:02d} {5} {6} {7:1.2f} {8} {9} {10}\n".format(
+        file.write("{0:02d} {1:02d} {2:02d} {3:02d}{4:02d} {5} {6} {7:1.2f} {8} {9} {10}\n".format(
             entry['time'].year,
             entry['time'].month,
             entry['time'].day,

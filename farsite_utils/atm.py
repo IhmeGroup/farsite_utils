@@ -1,6 +1,7 @@
 """Utilities for reading and writing ATM files and their associated wind files."""
 
 import os
+from enum import Enum
 import datetime as dt
 import numpy as np
 import pandas as pd
@@ -9,6 +10,7 @@ from collections import Counter
 from . import ascii_data
 
 
+_HEADER_LINES = 3
 _DEFAULT_YEAR = 2000
 _DATA_COLS = [
     'time',
@@ -18,8 +20,20 @@ _DATA_COLS = [
     'wind_direction_data']
 
 
+class Type(Enum):
+    WINDS_AND_CLOUDS = 1
+    WEATHER_AND_WINDS = 2
+
+
+class Unit(Enum):
+    ENGLISH = 1
+    METRIC = 2
+
+
 class ATM:
     def __init__(self, filename=None):
+        self.type = Type.WINDS_AND_CLOUDS
+        self.units = Unit.ENGLISH
         self.data = pd.DataFrame(columns = _DATA_COLS)
         self.root_dir = "./"
 
@@ -56,6 +70,22 @@ class ATM:
         return self.data.loc[0, 'wind_speed_data'].shape
     
 
+    def __parseHeader(self, file):
+        # Parse elevation
+        line1 = file.readline()
+        try:
+            self.type = Type[line1.strip().upper()]
+        except KeyError:
+            raise IOError("Invalid type specification. Must be WINDS_AND_CLOUDS or WEATHER_AND_WINDS.")
+
+        # Parse unit system
+        line2 = file.readline()
+        try:
+            self.units = Unit[line2.strip().upper()]
+        except KeyError:
+            raise IOError("Invalid units specification. Must be ENGLISH or METRIC.")
+    
+
     def __parseBodyLine(self, line):
         vals = line.strip().split()
         entry = {}
@@ -82,22 +112,28 @@ class ATM:
         self.root_dir = os.path.split(filename)[0]
         self.data = self.data[0:0]
         with open(filename, "r") as file:
+            self.__parseHeader(file)
             self.__parseBody(file)
     
 
-    def __writeBodyLine(self, file, entry):
-        file.write("{0} {1} {2}{3:02d} {4} {5}\n".format(
+    def __writeHeader(self, file):
+        file.write(self.type.name.upper() + "\n")
+        file.write(self.units.name.upper() + "\n")
+    
+
+    def __writeBodyLine(self, file, entry, root_dir):
+        file.write("{0:02d} {1:02d} {2:02d}{3:02d} {4} {5}\n".format(
             entry['time'].month,
             entry['time'].day,
             entry['time'].hour,
             entry['time'].minute,
-            entry['wind_speed_file'],
-            entry['wind_direction_file']))
+            os.path.join(root_dir, entry['wind_speed_file']),
+            os.path.join(root_dir, entry['wind_direction_file'])))
     
 
-    def __writeBody(self, file):
+    def __writeBody(self, file, root_dir):
         for i in range(self.count):
-            self.__writeBodyLine(file, self.data.loc[i])
+            self.__writeBodyLine(file, self.data.iloc[i], root_dir)
     
 
     def __writeFilesLine(self, root_dir, entry):
@@ -112,7 +148,8 @@ class ATM:
     
     def write(self, filename):
         with open(filename, "w") as file:
-            self.__writeBody(file)
+            self.__writeHeader(file)
+            self.__writeBody(file, os.path.normpath(filename).split(os.sep)[-2])
         self.__writeFiles(os.path.split(filename)[0])
     
 

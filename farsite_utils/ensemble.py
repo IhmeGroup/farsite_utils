@@ -51,6 +51,7 @@ class Ensemble:
         if root_dir:
             self.root_dir = root_dir
         self.exported = [False] * self.size
+        self.post_windninja = [False] * self.size
         self.verbose = False
     
 
@@ -152,6 +153,14 @@ class Ensemble:
             case.run()
     
 
+    def runWindNinja(self, case_ids=None):
+        """Run WindNinja on all cases in ensemble."""
+        if case_ids is None:
+            case_ids = np.arange(self.size)
+        for case in self.cases[case_ids]:
+            case.runWindNinja()
+    
+
     def postProcessCase(self, case, render=False):
         """Postprocess a single case and return success status."""
         if case.ignitionFailed():
@@ -172,7 +181,7 @@ class Ensemble:
         if case_ids is None:
             case_ids = np.arange(self.size)
         for i in range(attempts):
-            print("Attempt {0}".format(i))
+            print("> postProcess: Attempt {0}".format(i))
             # Collect cases which have not yet been exported
             indices_to_export = []
             cases_to_export = []
@@ -183,7 +192,11 @@ class Ensemble:
             
             # Postprocess remaining cases in parallel
             pool = multiprocessing.Pool(n_processes)
-            results = pool.map(functools.partial(self.postProcessCase, render=render), cases_to_export)
+            results = pool.map(
+                functools.partial(
+                    self.postProcessCase,
+                    render=render),
+                cases_to_export)
 
             # Determine which cases have been successful
             cases_ignition_failed = []
@@ -204,6 +217,56 @@ class Ensemble:
                 time.sleep(pause_time)
         
         return cases_ignition_failed + cases_not_done_yet
+    
+
+    def postProcessWindNinjaCase(self, case):
+        """Postprocess WindNinja for a single case and return success status."""
+        if not case.isDoneWindNinja():
+            return CaseStatus.NOT_DONE_YET
+        case.readOutputWindNinja()
+        case.expandWindNinjaData()
+        case.atm.write(os.path.join(case.root_dir, case.atm_file_local))
+        case.writeInput(os.path.join(case.root_dir, case.name + ".input"))
+        return CaseStatus.DONE
+    
+
+    def postProcessWindNinja(self, case_ids=None, n_processes=multiprocessing.cpu_count(), 
+                    attempts=1, pause_time=5):
+        """Postprocess WindNinja for all cases in ensemble."""
+        if case_ids is None:
+            case_ids = np.arange(self.size)
+        for i in range(attempts):
+            print("> postProcessWindNinja: Attempt {0}".format(i))
+            # Collect cases which have not yet been exported
+            indices_to_export = []
+            cases_to_export = []
+            for j, case in enumerate(self.cases[case_ids]):
+                if not self.post_windninja[j]:
+                    indices_to_export.append(case_ids[j])
+                    cases_to_export.append(case)
+            
+            # Postprocess remaining cases in parallel
+            pool = multiprocessing.Pool(n_processes)
+            results = pool.map(
+                functools.partial(
+                    self.postProcessWindNinjaCase),
+                cases_to_export)
+
+            # Determine which cases have been successful
+            cases_not_done_yet = []
+            for j, case_result in enumerate(results):
+                self.post_windninja[indices_to_export[j]] = (case_result == CaseStatus.DONE)
+                if case_result == CaseStatus.NOT_DONE_YET:
+                    cases_not_done_yet.append(self.caseID(indices_to_export[j]))
+            
+            # If no remaining cases, break. Otherwise report failure and try again
+            if not cases_not_done_yet:
+                break
+            else:
+                print("Failed to postprocess - windninja:", *cases_not_done_yet)
+                time.sleep(pause_time)
+        
+        return cases_not_done_yet
     
 
     def __computeAndPlotHistogram(self, data, name, title, bins=None):

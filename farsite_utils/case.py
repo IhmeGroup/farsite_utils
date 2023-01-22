@@ -3,6 +3,7 @@
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import os
+import glob
 import subprocess
 import warnings
 from enum import Enum
@@ -21,6 +22,7 @@ from matplotlib import animation
 from . import landscape
 from . import raws
 from . import atm
+from . import windninja_config
 from . import sbatch
 from . import ascii_data
 
@@ -76,15 +78,19 @@ class LineType(Enum):
 class Case:
     """This class represents an individual FARSITE case."""
 
-    def __init__(self, jobfile_name=None):
+    def __init__(self, jobfile_name=None, jobfile_windninja_name=None):
         # Inputs
         self.sbatch = sbatch.SBatch()
+        self.sbatch_windninja = sbatch.SBatch()
         self.name = "case"
         self.root_dir = "./"
         self.out_dir_local = "output/"
         self.landscape_dir_local = "landscape/"
         self.ignition_dir_local = "ignition/"
-        self.jobfile_name_local = "job.slurm"
+        self.wind_dir_local = "wind/"
+        self.jobfile_name_local = "job_farsite.slurm"
+        self.jobfile_windninja_name_local = "job_windninja.slurm"
+        self.atm_file_local = os.path.join(self.wind_dir_local, "case.atm")
         self.start_time = dt.datetime(_DEFAULT_YEAR, 1, 1)
         self.end_time = dt.datetime(_DEFAULT_YEAR, 1, 1)
         self.burn_periods_count = 0
@@ -103,6 +109,7 @@ class Case:
         self.fuel_moistures = pd.DataFrame(columns = _FUEL_MOISTURES_COLS)
         self.weather = raws.RAWS()
         self.atm = atm.ATM()
+        self.windninja_config = windninja_config.WindNinjaConfig()
         self.foliar_moisture_content = 100
         self.crown_fire_method = CrownFireMethod.FINNEY
         self.number_processors = 1
@@ -110,6 +117,7 @@ class Case:
         self.ignition = gpd.GeoDataFrame()
         self.out_type = 0
         self.job_id = None
+        self.job_id_windninja = None
 
         # Outputs
         self.arrival_time       = ascii_data.ASCIIData()
@@ -131,6 +139,8 @@ class Case:
 
         if jobfile_name:
             self.read(jobfile_name)
+        if jobfile_windninja_name:
+            self.readWindNinja(jobfile_windninja_name)
     
 
     def __str__(self):
@@ -149,7 +159,8 @@ class Case:
         if not isinstance(value, str):
             raise TypeError("Case.name must be a string")
         self._name = value
-        self.sbatch.set_option("-J", value)
+        self.sbatch.set_option("-J", value + "_farsite")
+        self.sbatch_windninja.set_option("-J", value + "_windninja")
     
 
     @property
@@ -195,10 +206,19 @@ class Case:
         self.lcp.read(os.path.join(self.root_dir, os.path.splitext(args[0])[0]))
         self.readInput(os.path.join(self.root_dir, args[1]))
         self.ignition = gpd.read_file(os.path.join(self.root_dir, args[2]))
+
         out_prefix_local = args[4]
-        [self.out_dir_local, name] = os.path.split(out_prefix_local)
-        self.name = name
+        [self.out_dir_local, self.name] = os.path.split(out_prefix_local)
         self.out_type = int(args[5])
+    
+
+    def readWindNinja(self, jobfile_windninja_name):
+        self.jobfile_windninja_name_local = os.path.split(jobfile_windninja_name)[1]
+        self.sbatch_windninja.read(jobfile_windninja_name)
+        windninja_config_file_name = os.path.join(
+            self.root_dir,
+            self.sbatch_windninja.runfile_name_local)
+        self.windninja_config.read(windninja_config_file_name)
     
 
     def __writeInputHeader(self, file):
@@ -264,7 +284,7 @@ class Case:
 
     def __writeInputATM(self, file):
         """Write atm parameters to the input file."""
-        file.write("FARSITE_ATM_FILE: {0}\n".format(self.name+".atm"))
+        file.write("FARSITE_ATM_FILE: {0}\n".format(self.atm_file_local))
     
 
     def __writeInputCrown(self, file):
@@ -286,6 +306,7 @@ class Case:
             self.__writeInputFuelMoistures(file)
             file.write("\n\n")
             self.__writeInputWeather(file)
+            self.__writeInputATM(file)
             file.write("\n\n")
             self.__writeInputCrown(file)
     
@@ -370,8 +391,8 @@ class Case:
             self.weather = raws.RAWS(os.path.join(self.root_dir, val))
             self.start_time = self.start_time.replace(year=self.weather.data.at[0, 'time'].year)
             self.end_time = self.end_time.replace(year=self.weather.data.at[0, 'time'].year)
-        elif name == "FARSITE_ATM_FILE":
-            self.atm = atm.ATM(os.path.join(self.root_dir, val))
+        # elif name == "FARSITE_ATM_FILE":
+        #     self.atm = atm.ATM(os.path.join(self.root_dir, val))
         elif name == "FOLIAR_MOISTURE_CONTENT":
             self.foliar_moisture_content = int(val)
         elif name == "CROWN_FIRE_METHOD":
@@ -444,6 +465,7 @@ class Case:
         """Write all files to the root directory with proper structure"""
         landscape_dir = os.path.join(self.root_dir, self.landscape_dir_local)
         ignition_dir = os.path.join(self.root_dir, self.ignition_dir_local)
+        wind_dir = os.path.join(self.root_dir, self.wind_dir_local)
         out_dir = os.path.join(self.root_dir, self.out_dir_local)
 
         if not os.path.isdir(self.root_dir):
@@ -452,34 +474,47 @@ class Case:
             os.makedirs(landscape_dir, exist_ok=True)
         if not os.path.isdir(ignition_dir):
             os.makedirs(ignition_dir, exist_ok=True)
+        if not os.path.isdir(wind_dir):
+            os.makedirs(wind_dir, exist_ok=True)
         if not os.path.isdir(out_dir):
             os.makedirs(out_dir, exist_ok=True)
         
-        input_file_local = self.name+".input"
+        input_file_local = self.name + ".input"
         lcp_prefix_local = os.path.join(self.landscape_dir_local, self.name)
-        weather_file_local = self.name+".raws"
-        atm_file_local = self.name+".atm"
-        ignition_file_local = os.path.join(self.ignition_dir_local, self.name+".shp")
-        run_file_local = "run_"+self.name+".txt"
-        job_file_local = "job.slurm"
+        weather_file_local = self.name + ".raws"
+        windninja_config_file_local = self.name + ".cfg"
+        ignition_file_local = os.path.join(self.ignition_dir_local, self.name + ".shp")
+        run_file_local = "run_" + self.name + ".txt"
+        job_file_local = self.jobfile_name_local
+        job_file_windninja_local = self.jobfile_windninja_name_local
         out_prefix_local = os.path.join(self.out_dir_local, self.name)
 
         input_file = os.path.join(self.root_dir, input_file_local)
         lcp_prefix = os.path.join(self.root_dir, lcp_prefix_local)
         weather_file = os.path.join(self.root_dir, weather_file_local)
-        atm_file = os.path.join(self.root_dir, atm_file_local)
+        windninja_config_file = os.path.join(self.root_dir, windninja_config_file_local)
         ignition_file = os.path.join(self.root_dir, ignition_file_local)
         run_file = os.path.join(self.root_dir, run_file_local)
         job_file = os.path.join(self.root_dir, job_file_local)
+        job_file_windninja = os.path.join(self.root_dir, job_file_windninja_local)
         
         self.writeInput(input_file)
         self.lcp.write(lcp_prefix)
         self.weather.write(weather_file)
-        self.atm.write(atm_file)
+        self.windninja_config.set_option(
+            "output_path",
+            self.wind_dir_local)
+        self.windninja_config.set_option(
+            "elevation_file",
+            os.path.join(self.landscape_dir_local, self.name + "_wn.lcp")) # _wn part is hacky, fix this
+        self.windninja_config.write(windninja_config_file)
         self.ignition.to_file(ignition_file)
         self.sbatch.runfile_name_local = run_file_local
         self.sbatch.write(job_file)
+        self.sbatch_windninja.runfile_name_local = windninja_config_file_local
+        self.sbatch_windninja.write(job_file_windninja)
 
+        # Write run file
         with open(run_file, "w") as file:
             file.write("{0} {1} {2} {3} {4} {5}".format(
                 lcp_prefix_local+".lcp",
@@ -491,31 +526,64 @@ class Case:
     
 
     def run(self):
-        """Submit the slurm job to run the case."""
+        """Submit the Farsite slurm job."""
         current_dir = os.getcwd()
         os.chdir(self.root_dir)
-        result = subprocess.run(["sbatch", self.jobfile_name_local], stdout=subprocess.PIPE)
+        result = subprocess.run(
+            ["sbatch", self.jobfile_name_local],
+            stdout=subprocess.PIPE)
         self.job_id = int(result.stdout.decode('utf-8').strip().split(" ")[-1])
         os.chdir(current_dir)
     
 
+    def runWindNinja(self):
+        """Submit the WindNinja slurm job."""
+        current_dir = os.getcwd()
+        os.chdir(self.root_dir)
+        result = subprocess.run(
+            ["sbatch", self.jobfile_windninja_name_local],
+            stdout=subprocess.PIPE)
+        self.job_id_windninja = int(result.stdout.decode('utf-8').strip().split(" ")[-1])
+        os.chdir(current_dir)
+    
+
     def detectJobID(self):
-        """Detect the job ID from the log file."""
+        """Detect the FARSITE job ID from the log file."""
         files = os.listdir(self.root_dir)
         for file in files:
-            if ".out" in file:
+            if ("_farsite" in file) and (".out" in file):
                 self.job_id = int(file.split(".")[1])
                 return
     
 
+    def detectJobIDWindNinja(self):
+        """Detect the WindNinja job ID from the log file."""
+        files = os.listdir(self.root_dir)
+        for file in files:
+            if ("_windninja" in file) and (".out" in file):
+                self.job_id_windninja = int(file.split(".")[1])
+                return
+    
+
     def logFile(self):
-        """Find log file, if it exists."""
+        """Find FARSITE log file, if it exists."""
         if self.job_id is None:
-            raise RuntimeError("Job ID is None -- cannot attempt to find log file")
+            raise RuntimeError("FARSITE job ID is None -- cannot attempt to find log file")
         
         files = os.listdir(self.root_dir)
         for file in files:
-            if "{0:d}.out".format(self.job_id) in file:
+            if "_farsite.{0:d}.out".format(self.job_id) in file:
+                return file
+    
+
+    def logFileWindNinja(self):
+        """Find WindNinja log file, if it exists."""
+        if self.job_id_windninja is None:
+            raise RuntimeError("WindNinja job ID is None -- cannot attempt to find log file")
+        
+        files = os.listdir(self.root_dir)
+        for file in files:
+            if "_windninja.{0:d}.out".format(self.job_id_windninja) in file:
                 return file
     
 
@@ -540,8 +608,29 @@ class Case:
         return False
     
 
+    def isStartedWindNinja(self):
+        """Determine whether the WindNinja simulation has started."""
+        # If job ID has not been set, run has not started
+        if not self.job_id_windninja:
+            return False
+
+        # If log file does not exist, run has not started
+        log_file = self.logFileWindNinja()
+        if not log_file:
+            return False
+        
+        # Read log file for launch line, started if found
+        with open(os.path.join(self.root_dir, log_file), "r") as file:
+            for line in file:
+                if "Run 0:" in line:
+                    return True
+        
+        # Not started if line not found
+        return False
+    
+
     def isDone(self):
-        """Determine whether the slurm job has completed."""
+        """Determine whether the FARSITE slurm job has completed."""
         # FARSITE cannot be done if it has not started
         if not self.isStarted():
             return False
@@ -550,6 +639,22 @@ class Case:
         with open(os.path.join(self.root_dir, self.logFile()), "r") as file:
             for line in file:
                 if "Writing outputs" in line:
+                    return True
+        
+        # Not done if output line not found
+        return False
+
+
+    def isDoneWindNinja(self):
+        """Determine whether the WindNinja slurm job has completed."""
+        # FARSITE cannot be done if it has not started
+        if not self.isStartedWindNinja():
+            return False
+        
+        # Read log file for output line, done if found
+        with open(os.path.join(self.root_dir, self.logFileWindNinja()), "r") as file:
+            for line in file:
+                if "Run number 0 done!" in line:
                     return True
         
         # Not done if output line not found
@@ -628,12 +733,32 @@ class Case:
         self.__convertAndMergePerimeters()
     
 
+    def readOutputWindNinja(self):
+        """Read WindNinja output data."""
+        atm_file = glob.glob(os.path.join(
+            self.root_dir,
+            self.wind_dir_local,
+            "*.atm"))[0]
+        self.atm_file_local = os.path.join(
+            self.wind_dir_local,
+            os.path.split(atm_file)[-1])
+        self.atm.read(os.path.join(self.root_dir, self.atm_file_local))
+        return
+
+
     def readProfilingData(self):
         self.step_wtimes = []
         with open(os.path.join(self.root_dir, self.logFile()), "r") as file:
             for line in file:
                 if "Step wall time:" in line:
                     self.step_wtimes.append(float(line.split()[3]) / 1000.0)
+    
+
+    def expandWindNinjaData(self):
+        """Expand single windninja data time instance to all RAWS times."""
+        self.atm.data = self.atm.data.append(self.atm.data.loc[0], ignore_index=True)
+        self.atm.data['time'].iloc[0] = self.weather.data['time'].iloc[0]
+        self.atm.data['time'].iloc[-1] = self.weather.data['time'].iloc[-1]
 
 
     def __plotPerimeters(self, ax, perimeters, color='k', linewidth=1):
@@ -723,7 +848,6 @@ class Case:
         writer = animation.FFMpegWriter(fps=int(self.burnDuration()/duration), bitrate=5000)
         anim.save(filename, writer=writer)
         # plt.show()
-
     
 
     def __burnMap(self, perimeter_poly):

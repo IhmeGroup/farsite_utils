@@ -55,12 +55,12 @@ class ASCIIData:
     
 
     def __writeHeader(self, file):
-        file.write("NCOLS: {0}\n".format(self.ncols))
-        file.write("NROWS: {0}\n".format(self.nrows))
-        file.write("XLLCORNER: {0}\n".format(self.xllcorner))
-        file.write("YLLCORNER: {0}\n".format(self.yllcorner))
-        file.write("CELLSIZE: {0}\n".format(self.cell_size))
-        file.write("NODATA_VALUE: {0}\n".format(self.nodata_value))
+        file.write("NCOLS {0}\n".format(self.ncols))
+        file.write("NROWS {0}\n".format(self.nrows))
+        file.write("XLLCORNER {0}\n".format(self.xllcorner))
+        file.write("YLLCORNER {0}\n".format(self.yllcorner))
+        file.write("CELLSIZE {0}\n".format(self.cell_size))
+        file.write("NODATA_VALUE {0}\n".format(self.nodata_value))
     
 
     def __writeBody(self, file):

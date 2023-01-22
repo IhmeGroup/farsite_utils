@@ -38,13 +38,16 @@ def detectFixes(batch, missing_cases):
     cases_to_post = []
     for case_id in missing_cases:
         batch.cases[case_id].detectJobID()
-        if batch.cases[case_id].ignitionFailed():
+        batch.cases[casd_id].detectJobIDWindNinja()
+        if not batch.cases[case_id].isDoneWindNinja():
+            cases_to_run.append(case_id)
+        elif batch.cases[case_id].ignitionFailed():
             cases_to_run.append(case_id)
         elif batch.cases[case_id].isDone():
             cases_to_post.append(case_id)
     return (cases_to_run, cases_to_post)
 
-seed = 11*42
+seed = 0*42
 np.random.seed(seed)
 cases_to_run = []
 cases_to_post = []
@@ -52,14 +55,15 @@ n_fuels = 40
 fuels = case.FUELS_40
 not_burnable_max = 0.3
 expected_res = 30.0
-data_dir = "/home/ihme/mbonanni/wildfire_ml/data_real"
+data_dir = "/usr/workspace/bonanni1/wildfire_ml/data_real"
 print("Loading prototype...")
-prototype = case.Case("../prototype/job.slurm")
+prototype = case.Case("../prototype/job_farsite.slurm")
 batch = ensemble.Ensemble(
     name      = "real",
     root_dir  = "./",
-    n_cases   = 1000,
-    prototype = case.Case("../prototype/job.slurm"))
+    n_cases   = 10,
+    prototype = case.Case("../prototype/job_farsite.slurm",
+                          "../prototype/job_windninja.slurm"))
 batch.cases_dir_local = "./cases"
 batch.out_dir_local = "./export"
 verbose = True
@@ -157,7 +161,7 @@ if cases_to_run:
         batch.cases[i].lcp.layers['slope'    ].unit_opts = np.int16(1) # Percent
         batch.cases[i].lcp.layers['elevation'].unit_opts = np.int16(0) # Meters
         batch.cases[i].lcp.layers['fuel'     ].unit_opts = np.int16(0) # No custom and no file
-        batch.cases[i].lcp.layers['cover'    ].unit_opts = np.int16(1) # Percent
+        batch.cases[i].lcp.layers['cover'    ].unit_opts = np.int16(0) # Percent
         batch.cases[i].lcp.layers['height'   ].unit_opts = np.int16(3) # Meters x 10
         batch.cases[i].lcp.layers['base'     ].unit_opts = np.int16(3) # Meters x 10
         batch.cases[i].lcp.layers['density'  ].unit_opts = np.int16(3) # kg / m^3
@@ -188,6 +192,12 @@ if cases_to_run:
         batch.cases[i].lcp.layers['duff'     ].data = np.zeros(shape, dtype=np.int16)
         batch.cases[i].lcp.layers['woody'    ].data = np.zeros(shape, dtype=np.int16)
 
+        # Wind
+        wind_speed = np.random.randint(0, 50)
+        wind_direction = np.random.randint(0, 359)
+        batch.cases[i].windninja_config.set_option("input_speed", wind_speed)
+        batch.cases[i].windninja_config.set_option("input_direction", wind_direction)
+
         # Weather
         batch.cases[i].weather.elevation = 0
         batch.cases[i].weather.units = raws.Unit.METRIC
@@ -205,8 +215,6 @@ if cases_to_run:
             hour   = batch.cases[i].end_time.hour + 1,
             minute = 0)
         total_hours = int((weather_end_time - weather_start_time).total_seconds() / 3600)
-        wind_speed = np.random.randint(0, 50)
-        wind_direction = np.random.randint(0, 359)
         for hours in range(total_hours+1):
             entry = {}
             entry['time'          ] = weather_start_time + dt.timedelta(hours=hours)
@@ -258,12 +266,30 @@ if cases_to_run:
     
     print("Writing cases...")
     batch.write(cases_to_run)
+
+    # Change cover unit_opts to 0 for farsite (hacky, remove if possible)
+    for i in cases_to_run:
+        batch.cases[i].lcp.layers['cover'].unit_opts = np.int16(1)
+        batch.cases[i].lcp.write(
+            os.path.join(
+                batch.cases[i].root_dir,
+                batch.cases[i].landscape_dir_local,
+                batch.cases[i].name + "_wn"))
+    
+    print("Running windninja")
+    batch.runWindNinja(cases_to_run)
+
+    print("Post-processing windninja output")
+    cases_not_done_windninja = batch.postProcessWindNinja(cases_to_run, attempts=50, pause_time=60)
+
+    # import code; code.interact(local=locals())
+
     print("Running cases...")
-    batch.run(cases_to_run)
+    batch.run(list(set(cases_to_run) - set(cases_not_done_windninja)))
 
 # Read additional cases that need to be post-processed
 if cases_to_post:
-    print("Reading cases to be post-processed...")
+    print("Reading cases to be FARSITE post-processed...")
     for case_id in cases_to_post:
         batch.cases[case_id] = case.Case(
             os.path.join(

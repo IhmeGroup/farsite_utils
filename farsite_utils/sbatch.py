@@ -68,7 +68,10 @@ class SBatch:
             _Option("--partition", "pdebug")]
         self.echoline = ""
         self.exec = []
+        self.exec_windninja = []
         self.runfile_name_local = ""
+        self.windninja_config_file_local = ""
+        self.setup_lines = []
 
         if filename:
             self.read(filename)
@@ -107,7 +110,7 @@ class SBatch:
                     self.options.append(opt)
                 elif split[0] == "echo":
                     self.echoline = " ".join(split[1:])
-                elif "TestFARSITE" in split[0]:
+                elif ("TestFARSITE" in split[0]) or ("WindNinja_cli" in split[0]):
                     self.exec = split[0]
                     runfile_name = split[1]
                     runfile_name_split = runfile_name.split(os.path.sep)
@@ -115,6 +118,8 @@ class SBatch:
                         self.runfile_name_local = os.path.join(*runfile_name_split[1:])
                     else:
                         self.runfile_name_local = runfile_name
+                elif len(line) > 0 and not line[0] == "#":
+                    self.setup_lines.append(line.strip())
 
 
     def write(self, filename):
@@ -126,6 +131,8 @@ class SBatch:
             file.write("\n")
             file.write("echo " + self.echoline + "\n")
             file.write("\n")
+            for line in self.setup_lines:
+                file.write(line + "\n")
             file.write(self.exec + " " + self.runfile_name_local)
 
 

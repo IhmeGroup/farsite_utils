@@ -171,6 +171,10 @@ class Layer:
     @property
     def shape(self):
         return self.data.shape
+    
+
+    def containsNODATA(self):
+        return(np.any(self.data == _NODATA_VALUE))
 
 
 class Landscape:
@@ -243,6 +247,13 @@ class Landscape:
     def shape(self, value):
         self.num_north = value[0]
         self.num_east  = value[1]
+    
+
+    def containsNODATA(self):
+        for layer in self.layers.values():
+            if layer.containsNODATA():
+                return True
+        return False
 
 
     def crownPresent(self):

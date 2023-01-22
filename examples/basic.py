@@ -116,7 +116,7 @@ if cases_to_run:
         batch.cases[i].lcp.layers['fuel'].unit_opts = np.int16(0) # No custom and no file
         batch.cases[i].lcp.layers['fuel'].data = np.ones(shape, dtype=np.int16) * np.random.choice(fuels)
         batch.cases[i].lcp.layers['cover'].file = ""
-        batch.cases[i].lcp.layers['cover'].unit_opts = np.int16(0) # Percent
+        batch.cases[i].lcp.layers['cover'].unit_opts = np.int16(1) # Percent
         batch.cases[i].lcp.layers['cover'].data = np.ones(shape, dtype=np.int16) * np.random.randint(low=0, high=100, dtype=np.int16)
         batch.cases[i].lcp.crown_fuels = 21 # on
         batch.cases[i].lcp.layers['height'].file = ""
