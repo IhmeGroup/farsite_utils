@@ -121,36 +121,37 @@ class ATM:
         file.write(self.units.name.upper() + "\n")
     
 
-    def __writeBodyLine(self, file, entry, root_dir):
+    def __writeBodyLine(self, file, entry):
+        wind_dir_local = os.path.normpath(self.root_dir).split(os.sep)[-1]
         file.write("{0:02d} {1:02d} {2:02d}{3:02d} {4} {5}\n".format(
             entry['time'].month,
             entry['time'].day,
             entry['time'].hour,
             entry['time'].minute,
-            os.path.join(root_dir, entry['wind_speed_file']),
-            os.path.join(root_dir, entry['wind_direction_file'])))
+            os.path.join(wind_dir_local, entry['wind_speed_file']),
+            os.path.join(wind_dir_local, entry['wind_direction_file'])))
     
 
-    def __writeBody(self, file, root_dir):
+    def __writeBody(self, file):
         for i in range(self.count):
-            self.__writeBodyLine(file, self.data.iloc[i], root_dir)
+            self.__writeBodyLine(file, self.data.iloc[i])
     
 
-    def __writeFilesLine(self, root_dir, entry):
-        entry['wind_speed_data'    ].write(os.path.join(root_dir, entry['wind_speed_file'    ]))
-        entry['wind_direction_data'].write(os.path.join(root_dir, entry['wind_direction_file']))
+    def __writeFilesLine(self, entry):
+        entry['wind_speed_data'    ].write(os.path.join(self.root_dir, entry['wind_speed_file'    ]))
+        entry['wind_direction_data'].write(os.path.join(self.root_dir, entry['wind_direction_file']))
     
 
-    def __writeFiles(self, root_dir):
+    def __writeFiles(self):
         for i in range(self.count):
-            self.__writeFilesLine(root_dir, self.data.loc[i])
+            self.__writeFilesLine(self.data.loc[i])
     
     
     def write(self, filename):
         with open(filename, "w") as file:
             self.__writeHeader(file)
-            self.__writeBody(file, os.path.normpath(filename).split(os.sep)[-2])
-        self.__writeFiles(os.path.split(filename)[0])
+            self.__writeBody(file)
+        self.__writeFiles()
     
 
     def writeNPY(self, prefix, query_times=None):

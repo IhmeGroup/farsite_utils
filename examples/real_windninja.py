@@ -47,7 +47,7 @@ def detectFixes(batch, missing_cases):
             cases_to_post.append(case_id)
     return (cases_to_run, cases_to_post)
 
-seed = 0*42
+seed = 0*42 + 1
 np.random.seed(seed)
 cases_to_run = []
 cases_to_post = []
@@ -61,7 +61,7 @@ prototype = case.Case("../prototype/job_farsite.slurm")
 batch = ensemble.Ensemble(
     name      = "real",
     root_dir  = "./",
-    n_cases   = 10,
+    n_cases   = 1000,
     prototype = case.Case("../prototype/job_farsite.slurm",
                           "../prototype/job_windninja.slurm"))
 batch.cases_dir_local = "./cases"
@@ -277,12 +277,11 @@ if cases_to_run:
                 batch.cases[i].name + "_wn"))
     
     print("Running windninja")
+    batch.clearWindNinja(cases_to_run)
     batch.runWindNinja(cases_to_run)
 
     print("Post-processing windninja output")
     cases_not_done_windninja = batch.postProcessWindNinja(cases_to_run, attempts=50, pause_time=60)
-
-    # import code; code.interact(local=locals())
 
     print("Running cases...")
     batch.run(list(set(cases_to_run) - set(cases_not_done_windninja)))

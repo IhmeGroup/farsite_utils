@@ -161,6 +161,14 @@ class Ensemble:
             case.runWindNinja()
     
 
+    def clearWindNinja(self, case_ids=None):
+        """Clear WindNinja data for all cases in ensemble."""
+        if case_ids is None:
+            case_ids = np.arange(self.size)
+        for case in self.cases[case_ids]:
+            case.clearWindNinja()
+    
+
     def postProcessCase(self, case, render=False):
         """Postprocess a single case and return success status."""
         if case.ignitionFailed():
@@ -225,7 +233,7 @@ class Ensemble:
             return CaseStatus.NOT_DONE_YET
         case.readOutputWindNinja()
         case.expandWindNinjaData()
-        case.atm.write(os.path.join(case.root_dir, case.atm_file_local))
+        case.atm.write(os.path.join(case.root_dir, case.name + ".atm"))
         case.writeInput(os.path.join(case.root_dir, case.name + ".input"))
         return CaseStatus.DONE
     

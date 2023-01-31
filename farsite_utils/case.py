@@ -90,7 +90,6 @@ class Case:
         self.wind_dir_local = "wind/"
         self.jobfile_name_local = "job_farsite.slurm"
         self.jobfile_windninja_name_local = "job_windninja.slurm"
-        self.atm_file_local = os.path.join(self.wind_dir_local, "case.atm")
         self.start_time = dt.datetime(_DEFAULT_YEAR, 1, 1)
         self.end_time = dt.datetime(_DEFAULT_YEAR, 1, 1)
         self.burn_periods_count = 0
@@ -284,7 +283,7 @@ class Case:
 
     def __writeInputATM(self, file):
         """Write atm parameters to the input file."""
-        file.write("FARSITE_ATM_FILE: {0}\n".format(self.atm_file_local))
+        file.write("FARSITE_ATM_FILE: {0}\n".format(self.name+".atm"))
     
 
     def __writeInputCrown(self, file):
@@ -547,6 +546,17 @@ class Case:
         os.chdir(current_dir)
     
 
+    def clearWindNinja(self):
+        """Delete all WindNinja data."""
+        files = glob.glob(
+            os.path.join(
+                self.root_dir,
+                self.wind_dir_local,
+                "*"))
+        for file in files:
+            os.remove(file)
+    
+
     def detectJobID(self):
         """Detect the FARSITE job ID from the log file."""
         files = os.listdir(self.root_dir)
@@ -739,10 +749,7 @@ class Case:
             self.root_dir,
             self.wind_dir_local,
             "*.atm"))[0]
-        self.atm_file_local = os.path.join(
-            self.wind_dir_local,
-            os.path.split(atm_file)[-1])
-        self.atm.read(os.path.join(self.root_dir, self.atm_file_local))
+        self.atm.read(atm_file)
         return
 
 
