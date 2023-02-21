@@ -187,8 +187,6 @@ class ATM:
         np.save(prefix + "_wind_east.npy",  wind_east)
         np.save(prefix + "_wind_north.npy", wind_north)
 
-        import code; code.interact(local=locals())
-
 
 def main():
     pass

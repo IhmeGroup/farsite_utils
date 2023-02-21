@@ -176,6 +176,8 @@ class Ensemble:
         if not case.isDone():
             return CaseStatus.NOT_DONE_YET
         case.readOutput()
+        if case.windninja_active:
+            case.readOutputWindNinjaPost()
         if render:
             case.renderOutput(os.path.join(case.root_dir, case.name))
         case.computeBurnMaps()

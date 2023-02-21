@@ -50,7 +50,7 @@ batch = ensemble.Ensemble(
     name      = "custom",
     root_dir  = "./",
     n_cases   = 10,
-    prototype = case.Case("../prototype/job.slurm"))
+    prototype = prototype)
 batch.cases_dir_local = "./cases"
 batch.out_dir_local = "./export"
 verbose = True
@@ -115,7 +115,6 @@ if cases_to_run:
         batch.cases[i].lcp.layers['fuel'].unit_opts = np.int16(0) # No custom and no file
         fuel = np.ones(shape, dtype=np.int16) * 101
         fuel = generate.setLine(fuel, shape[0], shape[1]/2, shape[0]*0.1, shape[1]/2, 99)
-        import code; code.interact(local=locals())
         batch.cases[i].lcp.layers['fuel'].data = fuel
         batch.cases[i].lcp.layers['cover'].file = ""
         batch.cases[i].lcp.layers['cover'].unit_opts = np.int16(1) # Percent

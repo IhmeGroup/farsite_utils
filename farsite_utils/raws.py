@@ -96,12 +96,12 @@ class RAWS:
             int(vals[2]),
             int("{0:04d}".format(int(vals[3]))[0:2]),
             int("{0:04d}".format(int(vals[3]))[2:4]))
-        entry['temperature'] =    int(vals[4])
-        entry['humidity'] =       int(vals[5])
+        entry['temperature'] =    int(float(vals[4]))
+        entry['humidity'] =       int(float(vals[5]))
         entry['precipitation'] =  float(vals[6])
-        entry['wind_speed'] =     int(vals[7])
-        entry['wind_direction'] = int(vals[8])
-        entry['cloud_cover'] =    int(vals[9])
+        entry['wind_speed'] =     int(float(vals[7]))
+        entry['wind_direction'] = int(float(vals[8]))
+        entry['cloud_cover'] =    int(float(vals[9]))
         return entry
     
 

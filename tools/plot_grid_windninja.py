@@ -41,8 +41,6 @@ def parse_metadata(file):
                 metadata[words[0]] = float(words[1])
     return metadata
 
-norm_arrivaltime = True
-
 def main():
     parser = argparse.ArgumentParser(description='Parse and plot arrival time.')
     parser.add_argument('-d', '--case-dir', type=str,
@@ -79,6 +77,7 @@ def main():
     for i, case_id in enumerate(args.case_ids):
 
         data = case.Case(os.path.join(args.case_dir, case_id, "job_farsite.slurm"))
+        data.readOutputWindNinja()
         data.readOutput()
 
         x = np.arange(data.lcp.shape[0]) * data.lcp.res_x
@@ -86,20 +85,15 @@ def main():
         X,Y = np.meshgrid(x,y)
         Y = np.flip(Y, axis=0)
 
-        if norm_arrivaltime:
-            if (i == 0):
-                fire_duration = np.amax(data.arrival_time.data)
-                contour_times = np.linspace(0.05*fire_duration, 0.95*fire_duration, args.num_contours)
-        else:
-            fire_duration = np.amax(data.arrival_time.data)
-            contour_times = np.linspace(0.05*fire_duration, 0.95*fire_duration, args.num_contours)
+        fire_duration = np.amax(data.arrival_time.data)
+        contour_times = np.linspace(0.05*fire_duration, 0.95*fire_duration, args.num_contours)
 
         # data.verbose = True
         # data.computeBurnMaps()
         # import code; code.interact(local=locals())
 
         cmap = 'plasma'
-        axs[i,0].imshow(data.arrival_time.data, extent=(0,x[-1],0,y[-1]), clim=(0, fire_duration), cmap=cmap)
+        axs[i,0].imshow(data.arrival_time.data, extent=(0,x[-1],0,y[-1]), cmap=cmap)
         divider = make_axes_locatable(axs[i,0])
         cax = divider.append_axes('right', size='5%', pad=0.05)
         m = plt.cm.ScalarMappable(cmap=cmap)
@@ -185,57 +179,35 @@ def main():
             right=False,
             labelbottom=False,
             labelleft=False)
-        
-        # import code; code.interact(local=locals())
-        # print("Case: " + case_id + " - speed: {0:.2f} - direction: {1:.2f}".format(data.weather.data['wind_speed'][0], data.weather.data['wind_direction'][0]))
-        # print("Case: " + case_id + " - fuel: {0:.2f}".format(data.lcp.layers['fuel'].data[0,0]))
 
-        windVec = np.array([
-            -data.weather.data['wind_speed'][0] * np.cos(
-                -np.radians(data.weather.data['wind_direction'][0]) + np.pi/2),
-            -data.weather.data['wind_speed'][0] * np.sin(
-                -np.radians(data.weather.data['wind_direction'][0]) + np.pi/2)])
-        windMag = np.linalg.norm(windVec)
-        unitWindVec = windVec / windMag
-        northVec = np.array([0, 1])
-#         origin = np.array([x[-1]/2, y[-1]/2])
+        wind_n_plot = 10
+        wind_nrows = data.atm.data['wind_speed_data'][0].nrows
+        wind_ncols = data.atm.data['wind_speed_data'][0].ncols
+        wind_interval_x = int(np.floor(wind_nrows / wind_n_plot))
+        wind_interval_y = int(np.floor(wind_ncols / wind_n_plot))
+        wind_cell_size = data.atm.data['wind_speed_data'][0].cell_size
+        wind_x = np.arange(wind_nrows) * wind_cell_size
+        wind_y = np.arange(wind_ncols) * wind_cell_size
+        wind_X, wind_Y = np.meshgrid(wind_x, wind_y)
+        wind_Y = np.flip(wind_Y, axis=0)
+        wind_speed     = data.atm.data['wind_speed_data'    ][0].data
+        wind_direction = data.atm.data['wind_direction_data'][0].data
+        wind_east  = -wind_speed * np.cos(-np.radians(wind_direction) + np.pi/2)
+        wind_north = -wind_speed * np.sin(-np.radians(wind_direction) + np.pi/2)
 
-        if (i == 0):
-            origin = np.array([800, y[-1]/4])
-            N_color = 'w'
-            speed_text = "{:0.1f} km/h".format(windMag)
-            speed_offset = [1250, 0]
-        elif (i == 1):
-            origin = np.array([x[-1]/8, y[-1]/8])
-            N_color = 'w'
-            speed_text = "{:0.1f} km/h".format(windMag)
-            speed_offset = [900, 100]
-        else:
-            origin = np.array([x[-1]/8, y[-1]/4])
-            N_color = 'w'
-            speed_text = "{:0.1f} km/h".format(windMag)
-            speed_offset = [500, -50]
-
-#         lw_arrow = 50.0
-        lw_arrow = 30.0
-#         lw_arc = 2.25
-        lw_arc = 2.0
-#         scale = 1000
-        scale = 500
-        axs[i,2].arrow(origin[0], origin[1], northVec[0]*scale, northVec[1]*scale, color='w', capstyle='round', width=lw_arrow, zorder=1001)
-        axs[i,2].arrow(origin[0], origin[1], unitWindVec[0]*scale, unitWindVec[1]*scale, color='r', capstyle='round', width=lw_arrow, zorder=1002)
-        theta2 = np.degrees(np.arctan2(windVec[1], windVec[0]))
-        if theta2 < 0:
-            theta2 = theta2 + 360.0
-        axs[i,2].add_patch(patches.Arc(origin, 0.5*scale, 0.5*scale, angle=0.0,
-            theta1=90.0, theta2=theta2, color='r', linewidth=lw_arc, zorder=1000))
-        axs[i,2].text(origin[0], origin[1] + (northVec[1] + 0.2)*scale,
-            "N", color=N_color, ha='center', va='bottom', zorder=1003)
-        axs[i,2].text(
-            origin[0] + unitWindVec[0]*scale*1.7 + speed_offset[0],
-            origin[1] + unitWindVec[1]*scale*1.7 + speed_offset[1],
-            speed_text,
-            color='w', ha='center', va='center', zorder=1004)
+        axs[i,2].quiver(
+            wind_X[::wind_interval_x, ::wind_interval_y],
+            wind_Y[::wind_interval_x, ::wind_interval_y],
+            wind_east[ ::wind_interval_x, ::wind_interval_y],
+            wind_north[::wind_interval_x, ::wind_interval_y],
+            color='r',
+            pivot='middle',
+            scale=300,
+            scale_units='width',
+            width=0.01,
+            zorder=np.inf)
+        axs[i,2].set_xlim(0, x[-1])
+        axs[i,2].set_ylim(0, y[-1])
     
     # axs[0,0].set_ylabel("\\emph{single fuel}")
     # axs[1,0].set_ylabel("\\emph{multiple fuel}")

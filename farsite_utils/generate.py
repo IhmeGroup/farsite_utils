@@ -198,6 +198,16 @@ def regularPolygon(sides, radius, rotation=0, translation=(0, 0)):
     return geometry.Polygon(points)
 
 
+def rectangle(x_center, y_center, width, height):
+    """Generate shapely rectangle."""
+    points = [
+        [x_center - width/2, y_center - height/2],
+        [x_center - width/2, y_center + height/2],
+        [x_center + width/2, y_center + height/2],
+        [x_center + width/2, y_center - height/2]]
+    return geometry.Polygon(points)
+
+
 def setBorder(field, thickness, value):
     """Set border of field with given thickness to given value."""
 

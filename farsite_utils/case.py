@@ -89,7 +89,8 @@ class Case:
         self.ignition_dir_local = "ignition/"
         self.wind_dir_local = "wind/"
         self.jobfile_name_local = "job_farsite.slurm"
-        self.jobfile_windninja_name_local = "job_windninja.slurm"
+        self.jobfile_windninja_name_local = None
+        self.windninja_active = False
         self.start_time = dt.datetime(_DEFAULT_YEAR, 1, 1)
         self.end_time = dt.datetime(_DEFAULT_YEAR, 1, 1)
         self.burn_periods_count = 0
@@ -212,6 +213,7 @@ class Case:
     
 
     def readWindNinja(self, jobfile_windninja_name):
+        self.windninja_active = True
         self.jobfile_windninja_name_local = os.path.split(jobfile_windninja_name)[1]
         self.sbatch_windninja.read(jobfile_windninja_name)
         windninja_config_file_name = os.path.join(
@@ -305,7 +307,8 @@ class Case:
             self.__writeInputFuelMoistures(file)
             file.write("\n\n")
             self.__writeInputWeather(file)
-            self.__writeInputATM(file)
+            if self.windninja_active:
+                self.__writeInputATM(file)
             file.write("\n\n")
             self.__writeInputCrown(file)
     
@@ -425,12 +428,12 @@ class Case:
         for line in lines:
             vals = self.__parseListLine(line)
             entry = {}
-            entry['model']           = int(vals[0])
-            entry['1_hour']          = int(vals[1])
-            entry['10_hour']         = int(vals[2])
-            entry['100_hour']        = int(vals[3])
-            entry['live_herbaceous'] = int(vals[4])
-            entry['live_woody']      = int(vals[5])
+            entry['model']           = int(float(vals[0]))
+            entry['1_hour']          = int(float(vals[1]))
+            entry['10_hour']         = int(float(vals[2]))
+            entry['100_hour']        = int(float(vals[3]))
+            entry['live_herbaceous'] = int(float(vals[4]))
+            entry['live_woody']      = int(float(vals[5]))
             self.fuel_moistures = self.fuel_moistures.append(entry, ignore_index=True)
     
 
@@ -485,33 +488,38 @@ class Case:
         ignition_file_local = os.path.join(self.ignition_dir_local, self.name + ".shp")
         run_file_local = "run_" + self.name + ".txt"
         job_file_local = self.jobfile_name_local
-        job_file_windninja_local = self.jobfile_windninja_name_local
+        if self.windninja_active:
+            job_file_windninja_local = self.jobfile_windninja_name_local
         out_prefix_local = os.path.join(self.out_dir_local, self.name)
 
         input_file = os.path.join(self.root_dir, input_file_local)
         lcp_prefix = os.path.join(self.root_dir, lcp_prefix_local)
         weather_file = os.path.join(self.root_dir, weather_file_local)
-        windninja_config_file = os.path.join(self.root_dir, windninja_config_file_local)
+        if self.windninja_active:
+            windninja_config_file = os.path.join(self.root_dir, windninja_config_file_local)
         ignition_file = os.path.join(self.root_dir, ignition_file_local)
         run_file = os.path.join(self.root_dir, run_file_local)
         job_file = os.path.join(self.root_dir, job_file_local)
-        job_file_windninja = os.path.join(self.root_dir, job_file_windninja_local)
+        if self.windninja_active:
+            job_file_windninja = os.path.join(self.root_dir, job_file_windninja_local)
         
         self.writeInput(input_file)
         self.lcp.write(lcp_prefix)
         self.weather.write(weather_file)
-        self.windninja_config.set_option(
-            "output_path",
-            self.wind_dir_local)
-        self.windninja_config.set_option(
-            "elevation_file",
-            os.path.join(self.landscape_dir_local, self.name + "_wn.lcp")) # _wn part is hacky, fix this
-        self.windninja_config.write(windninja_config_file)
+        if self.windninja_active:
+            self.windninja_config.set_option(
+                "output_path",
+                self.wind_dir_local)
+            self.windninja_config.set_option(
+                "elevation_file",
+                os.path.join(self.landscape_dir_local, self.name + "_wn.lcp")) # _wn part is hacky, fix this
+            self.windninja_config.write(windninja_config_file)
         self.ignition.to_file(ignition_file)
         self.sbatch.runfile_name_local = run_file_local
         self.sbatch.write(job_file)
-        self.sbatch_windninja.runfile_name_local = windninja_config_file_local
-        self.sbatch_windninja.write(job_file_windninja)
+        if self.windninja_active:
+            self.sbatch_windninja.runfile_name_local = windninja_config_file_local
+            self.sbatch_windninja.write(job_file_windninja)
 
         # Write run file
         with open(run_file, "w") as file:
@@ -560,10 +568,12 @@ class Case:
     def detectJobID(self):
         """Detect the FARSITE job ID from the log file."""
         files = os.listdir(self.root_dir)
+        self.job_id = 0
         for file in files:
             if ("_farsite" in file) and (".out" in file):
-                self.job_id = int(file.split(".")[1])
-                return
+                _id = int(file.split(".")[1])
+                if _id > self.job_id:
+                    self.job_id = _id
     
 
     def detectJobIDWindNinja(self):
@@ -749,6 +759,15 @@ class Case:
             self.root_dir,
             self.wind_dir_local,
             "*.atm"))[0]
+        self.atm.read(atm_file)
+        return
+    
+
+    def readOutputWindNinjaPost(self):
+        """Read WindNinja data, for final postprocessing."""
+        atm_file = os.path.join(
+            self.root_dir,
+            self.name + ".atm")
         self.atm.read(atm_file)
         return
 

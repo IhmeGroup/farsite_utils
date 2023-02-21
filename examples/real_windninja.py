@@ -38,8 +38,10 @@ def detectFixes(batch, missing_cases):
     cases_to_post = []
     for case_id in missing_cases:
         batch.cases[case_id].detectJobID()
-        batch.cases[casd_id].detectJobIDWindNinja()
+        batch.cases[case_id].detectJobIDWindNinja()
         if not batch.cases[case_id].isDoneWindNinja():
+            cases_to_run.append(case_id)
+        elif not batch.cases[case_id].isDone():
             cases_to_run.append(case_id)
         elif batch.cases[case_id].ignitionFailed():
             cases_to_run.append(case_id)
@@ -57,13 +59,13 @@ not_burnable_max = 0.3
 expected_res = 30.0
 data_dir = "/usr/workspace/bonanni1/wildfire_ml/data_real"
 print("Loading prototype...")
-prototype = case.Case("../prototype/job_farsite.slurm")
+prototype = case.Case("../prototype/job_farsite.slurm",
+                      "../prototype/job_windninja.slurm")
 batch = ensemble.Ensemble(
     name      = "real",
     root_dir  = "./",
     n_cases   = 1000,
-    prototype = case.Case("../prototype/job_farsite.slurm",
-                          "../prototype/job_windninja.slurm"))
+    prototype = prototype)
 batch.cases_dir_local = "./cases"
 batch.out_dir_local = "./export"
 verbose = True
@@ -293,7 +295,10 @@ if cases_to_post:
         batch.cases[case_id] = case.Case(
             os.path.join(
                 batch.cases[case_id].root_dir,
-                batch.cases[case_id].jobfile_name_local))
+                batch.cases[case_id].jobfile_name_local),
+            os.path.join(
+                batch.cases[case_id].root_dir,
+                batch.cases[case_id].jobfile_windninja_name_local))
         batch.cases[case_id].detectJobID()
 if (cases_to_run + cases_to_post):
     print("Post-processing cases...")
